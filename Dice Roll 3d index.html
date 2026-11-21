@@ -1,0 +1,3709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Dice Roll 3D — Devil Dice Prototype (100 Levels)</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎲</text></svg>">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: rgba(15, 23, 42, 0.88);
+            --card: rgba(30, 41, 59, 0.96);
+            --accent: #38bdf8;
+            --accent-2: #818cf8;
+            --gold: #fbbf24;
+            --danger: #f43f5e;
+            --success: #34d399;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            padding-top: env(safe-area-inset-top, 0px);
+            padding-right: env(safe-area-inset-right, 0px);
+            padding-bottom: max(136px, calc(124px + env(safe-area-inset-bottom, 0px)));
+            padding-left: env(safe-area-inset-left, 0px);
+            width: 100%;
+            min-height: 100dvh;
+            height: 100dvh;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 30%, #1e293b 0%, #0f172a 75%);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            color: var(--text);
+        }
+
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100dvh;
+            touch-action: none;
+            z-index: 1;
+        }
+
+        .hud-top {
+            position: fixed;
+            top: calc(10px + env(safe-area-inset-top, 0px));
+            left: calc(10px + env(safe-area-inset-left, 0px));
+            right: calc(10px + env(safe-area-inset-right, 0px));
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .hud-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .hud-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        .stat-pill {
+            background: var(--panel);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(8px);
+            border-radius: 12px;
+            padding: 6px 11px;
+            display: flex;
+            flex-direction: column;
+            min-width: 68px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+        }
+
+        .stat-label {
+            font-size: 9.5px;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--text);
+            line-height: 1.2;
+        }
+
+        .stat-value.accent { color: var(--accent); }
+        .stat-value.gold { color: var(--gold); }
+        .stat-value.success { color: var(--success); }
+
+        .btn-icon {
+            background: var(--panel);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            color: var(--text);
+            border-radius: 11px;
+            padding: 8px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            backdrop-filter: blur(8px);
+            transition: all 0.18s ease;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+            white-space: nowrap;
+        }
+
+        .btn-icon:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            transform: translateY(-1px);
+        }
+
+        .btn-icon:active {
+            transform: translateY(1px);
+        }
+
+        .btn-icon:disabled {
+            opacity: 0.42;
+            cursor: not-allowed;
+            border-color: rgba(255, 255, 255, 0.08);
+            color: var(--muted);
+            transform: none;
+        }
+
+        .btn-icon.mode-active {
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(129, 140, 248, 0.25));
+            border-color: var(--accent);
+            color: #e0f2fe;
+        }
+
+        .status-banner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            pointer-events: none;
+            width: 100%;
+            margin-top: 2px;
+        }
+
+        .mode-chip {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(56, 189, 248, 0.38);
+            color: var(--accent);
+            font-size: 11.5px;
+            font-weight: 700;
+            padding: 5px 13px;
+            border-radius: 999px;
+            letter-spacing: 0.25px;
+            text-align: center;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+            max-width: 100%;
+        }
+
+        .combo-toast {
+            font-size: 16px;
+            font-weight: 900;
+            color: var(--gold);
+            text-shadow: 0 2px 12px rgba(251, 191, 36, 0.55);
+            opacity: 0;
+            transform: scale(0.88) translateY(6px);
+            transition: all 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+            text-align: center;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(251, 191, 36, 0.28);
+            padding: 5px 13px;
+            border-radius: 12px;
+            max-width: 95%;
+        }
+
+        .combo-toast.show {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+
+        .controls-bottom {
+            position: fixed;
+            bottom: max(56px, calc(48px + env(safe-area-inset-bottom, 0px)));
+            left: calc(14px + env(safe-area-inset-left, 0px));
+            right: calc(14px + env(safe-area-inset-right, 0px));
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 12px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 54px);
+            grid-template-rows: repeat(3, 54px);
+            gap: 6px;
+            pointer-events: auto;
+            flex-shrink: 0;
+            position: relative;
+            border-radius: 50%;
+            transform-origin: center center;
+            will-change: transform;
+        }
+
+        .dpad-ring {
+            position: absolute;
+            inset: -6px;
+            border-radius: 50%;
+            border: 1.5px dashed rgba(56, 189, 248, 0.28);
+            pointer-events: none;
+        }
+
+        .dpad-btn {
+            background: rgba(30, 41, 59, 0.86);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            color: var(--text);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            backdrop-filter: blur(6px);
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+            transition: background 0.12s, transform 0.1s;
+        }
+
+        .dpad-btn:active, .dpad-btn.pressed {
+            background: var(--accent);
+            color: #0f172a;
+            transform: scale(0.93);
+        }
+
+        .dpad-empty {
+            pointer-events: none;
+        }
+
+        .action-pad {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+            pointer-events: auto;
+        }
+
+        .hop-btn {
+            background: linear-gradient(135deg, #38bdf8, #818cf8);
+            border: none;
+            color: #0f172a;
+            border-radius: 18px;
+            padding: 15px 18px;
+            font-size: 13.5px;
+            font-weight: 900;
+            letter-spacing: 0.35px;
+            cursor: pointer;
+            box-shadow: 0 10px 24px rgba(56, 189, 248, 0.35);
+            transition: transform 0.12s, filter 0.15s;
+            min-width: 122px;
+            text-align: center;
+        }
+
+        .hop-btn:active {
+            transform: scale(0.94);
+            filter: brightness(1.08);
+        }
+
+        .hint-pill {
+            background: rgba(15, 23, 42, 0.82);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--muted);
+            font-size: 11px;
+            padding: 6px 10px;
+            border-radius: 10px;
+            max-width: 220px;
+            text-align: right;
+            line-height: 1.35;
+        }
+
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(9, 13, 24, 0.72);
+            backdrop-filter: blur(6px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            z-index: 40;
+            pointer-events: auto;
+        }
+
+        .modal-backdrop.hidden {
+            display: none !important;
+            pointer-events: none !important;
+        }
+
+        .modal-card {
+            background: var(--card);
+            border: 1px solid rgba(56, 189, 248, 0.32);
+            border-radius: 20px;
+            max-width: 500px;
+            width: 100%;
+            max-height: 88dvh;
+            overflow-y: auto;
+            padding: 22px;
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
+            pointer-events: auto;
+        }
+
+        .modal-card h2 {
+            margin: 0 0 10px 0;
+            font-size: 21px;
+            background: linear-gradient(135deg, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .modal-card p, .modal-card li {
+            font-size: 13px;
+            line-height: 1.48;
+            color: #cbd5e1;
+        }
+
+        .modal-card ul {
+            padding-left: 18px;
+            margin: 10px 0 16px 0;
+        }
+
+        .modal-card li {
+            margin-bottom: 7px;
+        }
+
+        .modal-card strong {
+            color: #f8fafc;
+        }
+
+        .modal-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .modal-actions-row {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .primary-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #38bdf8, #818cf8);
+            color: #0f172a;
+            border: none;
+            border-radius: 12px;
+            padding: 13px 16px;
+            font-size: 14.5px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: transform 0.15s ease, filter 0.15s ease;
+        }
+
+        .primary-btn:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.05);
+        }
+
+        .secondary-btn {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.85);
+            color: var(--text);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-radius: 12px;
+            padding: 12px 14px;
+            font-size: 13.5px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .secondary-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            transform: translateY(-1px);
+        }
+
+        .puzzle-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin: 12px 0 14px 0;
+            max-height: 46dvh;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .puzzle-cell {
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 12px;
+            padding: 8px 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            min-height: 54px;
+        }
+
+        .puzzle-cell:hover {
+            border-color: var(--accent);
+            transform: translateY(-1px);
+        }
+
+        .puzzle-cell.completed {
+            border-color: rgba(52, 211, 153, 0.55);
+            background: rgba(16, 185, 129, 0.14);
+        }
+
+        .puzzle-cell.current {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
+        }
+
+        .puzzle-cell.locked {
+            opacity: 0.48;
+            border-style: dashed;
+        }
+
+        .puzzle-num {
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--text);
+        }
+
+        .puzzle-meta {
+            font-size: 9.5px;
+            font-weight: 700;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        .puzzle-cell.completed .puzzle-meta {
+            color: var(--success);
+        }
+
+        .puzzle-badge-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.72);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 8px 12px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: #cbd5e1;
+        }
+
+        .boot-status {
+            font-size: 11.5px;
+            color: var(--muted);
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .splash-screen {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100dvh;
+            z-index: 60;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            background-color: #030a24;
+            background-image: url('Dice.png');
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+            cursor: pointer;
+            overflow: hidden;
+            opacity: 1;
+            transition: opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.42s ease;
+            pointer-events: auto;
+        }
+
+        .splash-screen.dismissed {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .splash-img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center center;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .splash-fallback-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .splash-screen.use-fallback .splash-fallback-canvas {
+            display: block;
+        }
+
+        .splash-vignette {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 50% 45%, rgba(2, 8, 28, 0.04) 45%, rgba(2, 6, 23, 0.58) 100%);
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .splash-tap-prompt {
+            position: relative;
+            z-index: 3;
+            margin-bottom: max(54px, calc(44px + env(safe-area-inset-bottom, 0px)));
+            padding: 12px 26px;
+            border-radius: 999px;
+            background: rgba(6, 16, 46, 0.84);
+            border: 1.5px solid rgba(56, 189, 248, 0.72);
+            color: #f8fafc;
+            font-size: 14px;
+            font-weight: 900;
+            letter-spacing: 1.6px;
+            text-transform: uppercase;
+            text-shadow: 0 0 12px rgba(56, 189, 248, 0.85);
+            box-shadow: 0 0 24px rgba(56, 189, 248, 0.45), inset 0 0 12px rgba(56, 189, 248, 0.25);
+            backdrop-filter: blur(6px);
+            animation: splashPulse 1.75s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes splashPulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 0.94;
+                box-shadow: 0 0 22px rgba(56, 189, 248, 0.45), inset 0 0 10px rgba(56, 189, 248, 0.22);
+            }
+            50% {
+                transform: scale(1.05);
+                opacity: 1;
+                box-shadow: 0 0 34px rgba(56, 189, 248, 0.8), inset 0 0 16px rgba(56, 189, 248, 0.38);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .controls-bottom {
+                bottom: max(64px, calc(54px + env(safe-area-inset-bottom, 0px)));
+            }
+            .stat-pill {
+                padding: 5px 8px;
+                min-width: 54px;
+            }
+            .stat-label {
+                font-size: 8.5px;
+            }
+            .stat-value {
+                font-size: 13.5px;
+            }
+            .btn-icon {
+                padding: 6px 8px;
+                font-size: 11px;
+            }
+            .dpad {
+                grid-template-columns: repeat(3, 48px);
+                grid-template-rows: repeat(3, 48px);
+            }
+            .hint-pill {
+                display: none;
+            }
+            .puzzle-grid {
+                grid-template-columns: repeat(5, 1fr);
+                gap: 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div class="hud-top">
+        <div class="hud-row">
+            <div class="hud-group">
+                <div class="stat-pill">
+                    <span class="stat-label" id="stat1Label">Score</span>
+                    <span class="stat-value accent" id="stat1Val">0</span>
+                </div>
+                <div class="stat-pill">
+                    <span class="stat-label" id="stat2Label">Cleared</span>
+                    <span class="stat-value" id="stat2Val">0</span>
+                </div>
+                <div class="stat-pill">
+                    <span class="stat-label" id="stat3Label">Chain</span>
+                    <span class="stat-value gold" id="stat3Val">x1</span>
+                </div>
+            </div>
+
+            <div class="hud-group">
+                <button type="button" class="btn-icon mode-active" id="modeToggleBtn" title="Switch Game Mode">🧩 Puzzle 1/100</button>
+                <button type="button" class="btn-icon" id="levelSelectBtn" title="Choose Puzzle">📋 Levels</button>
+                <button type="button" class="btn-icon" id="undoBtn" title="Undo Move (Z / U)" disabled>↩️ Undo</button>
+                <button type="button" class="btn-icon" id="soundBtn" title="Toggle Sound">🔊 SFX</button>
+                <button type="button" class="btn-icon" id="helpBtn" title="How to Play">❓ Rules</button>
+                <button type="button" class="btn-icon" id="resetBtn" title="Restart">🔄 Retry</button>
+            </div>
+        </div>
+
+        <div class="status-banner">
+            <div class="mode-chip" id="modeChip">ON DIE TOP — Move onto empty tile to ROLL</div>
+            <div class="combo-toast" id="comboToast">CHAIN x2!</div>
+        </div>
+    </div>
+
+    <div class="controls-bottom">
+        <div class="dpad" id="dpadContainer" aria-label="Directional Controls">
+            <div class="dpad-ring" aria-hidden="true"></div>
+            <div class="dpad-empty"></div>
+            <button type="button" class="dpad-btn" data-dir="N" data-screen-dir="UP" aria-label="Move North"></button>
+            <div class="dpad-empty"></div>
+            <button type="button" class="dpad-btn" data-dir="W" data-screen-dir="LEFT" aria-label="Move West"></button>
+            <div class="dpad-empty"></div>
+            <button type="button" class="dpad-btn" data-dir="E" data-screen-dir="RIGHT" aria-label="Move East"></button>
+            <div class="dpad-empty"></div>
+            <button type="button" class="dpad-btn" data-dir="S" data-screen-dir="DOWN" aria-label="Move South"></button>
+            <div class="dpad-empty"></div>
+        </div>
+
+        <div class="action-pad">
+            <div class="hint-pill">
+                <strong>Arrows / WASD</strong> to move &amp; roll<br>
+                <strong>Space / Hop</strong> drop/climb &bull; <strong>Z</strong> Undo<br>
+                <strong>R</strong> Retry &bull; <strong>Drag</strong> orbit &bull; <strong>Pinch/Scroll</strong> zoom
+            </div>
+            <button type="button" class="hop-btn" id="hopBtn">⬇️ HOP DOWN</button>
+        </div>
+    </div>
+
+    <div class="splash-screen" id="splashScreen" role="button" tabindex="0" aria-label="Dice Roll 3D Starting Splash Screen — Tap anywhere to start">
+        <img src="Dice.png" alt="Dice Roll 3D Cover Art" class="splash-img" id="splashImg">
+        <canvas class="splash-fallback-canvas" id="splashFallbackCanvas"></canvas>
+        <div class="splash-vignette"></div>
+        <div class="splash-tap-prompt">Tap Anywhere to Start</div>
+    </div>
+
+    <div class="modal-backdrop" id="modalBackdrop" aria-hidden="false">
+        <div class="modal-card" id="modalCard">
+            <h2 id="modalTitle">🎲 Dice Roll 3D</h2>
+            <div id="modalBody">
+                <p>Roll 3D dice across the 7×7 grid to match their top numbers and clear the board!</p>
+                <ul>
+                    <li><strong>Puzzle Mode (100 Levels):</strong> Clear every die on the board. Starts with matching 3s and 4s, then progresses to multi-cluster &amp; 1s-ignition brainteasers!</li>
+                    <li><strong>Endless Arcade Mode:</strong> Survive rising dice waves and build massive chain multipliers.</li>
+                    <li><strong>Strict N-Match Rule (2–6):</strong> A die showing <strong>N</strong> on top sinks when orthogonally connected to <strong>at least N dice</strong> showing <strong>N</strong>.</li>
+                    <li><strong>Special 1s Rule:</strong> A <strong>1</strong> won't sink alone—connect or roll <strong>1</strong>s orthogonally adjacent to an already <em>sinking</em> die to ignite them!</li>
+                </ul>
+            </div>
+            <div class="modal-actions" id="modalActions">
+                <button type="button" class="primary-btn" id="modalActionBtn" data-next-action="start-puzzle">🧩 Play Puzzle Mode (1/100)</button>
+                <div class="modal-actions-row">
+                    <button type="button" class="secondary-btn" id="modalSecondaryBtn" data-next-action="open-levels">📋 100-Level Select</button>
+                    <button type="button" class="secondary-btn" id="modalTertiaryBtn" data-next-action="start-arcade">♾️ Endless Arcade</button>
+                </div>
+            </div>
+            <div class="boot-status" id="bootStatus">Ready — 3D engine initialized.</div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        'use strict';
+
+        // DOM Elements
+        const container = document.getElementById('canvas-container');
+        const stat1Label = document.getElementById('stat1Label');
+        const stat1Val = document.getElementById('stat1Val');
+        const stat2Label = document.getElementById('stat2Label');
+        const stat2Val = document.getElementById('stat2Val');
+        const stat3Label = document.getElementById('stat3Label');
+        const stat3Val = document.getElementById('stat3Val');
+        const modeToggleBtn = document.getElementById('modeToggleBtn');
+        const levelSelectBtn = document.getElementById('levelSelectBtn');
+        const undoBtn = document.getElementById('undoBtn');
+        const dpadContainer = document.getElementById('dpadContainer');
+        const modeChip = document.getElementById('modeChip');
+        const hopBtn = document.getElementById('hopBtn');
+        const comboToast = document.getElementById('comboToast');
+        const modalBackdrop = document.getElementById('modalBackdrop');
+        const modalCard = document.getElementById('modalCard');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalBody = document.getElementById('modalBody');
+        const modalActions = document.getElementById('modalActions');
+        const modalActionBtn = document.getElementById('modalActionBtn');
+        const modalSecondaryBtn = document.getElementById('modalSecondaryBtn');
+        const modalTertiaryBtn = document.getElementById('modalTertiaryBtn');
+        const bootStatus = document.getElementById('bootStatus');
+        const splashScreen = document.getElementById('splashScreen');
+        const splashImg = document.getElementById('splashImg');
+        const splashFallbackCanvas = document.getElementById('splashFallbackCanvas');
+
+        let isSplashActive = Boolean(splashScreen);
+
+        function renderSplashFallbackArtwork() {
+            if (!splashFallbackCanvas) return;
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            const w = Math.max(320, window.innerWidth);
+            const h = Math.max(480, window.innerHeight);
+            splashFallbackCanvas.width = Math.floor(w * dpr);
+            splashFallbackCanvas.height = Math.floor(h * dpr);
+
+            const ctx = splashFallbackCanvas.getContext('2d');
+            if (!ctx) return;
+            ctx.save();
+            ctx.scale(dpr, dpr);
+
+            // Deep cosmic blue radial backdrop
+            const bgGrad = ctx.createRadialGradient(w * 0.5, h * 0.34, 16, w * 0.5, h * 0.45, Math.max(w, h) * 0.85);
+            bgGrad.addColorStop(0, '#0a3a9c');
+            bgGrad.addColorStop(0.45, '#051a58');
+            bgGrad.addColorStop(1, '#020820');
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, w, h);
+
+            // Starburst light rays behind title & hero
+            ctx.save();
+            ctx.translate(w * 0.5, h * 0.36);
+            for (let i = 0; i < 48; i++) {
+                const ang = (i / 48) * Math.PI * 2;
+                ctx.rotate((Math.PI * 2) / 48);
+                const rayGrad = ctx.createLinearGradient(0, 0, 0, -Math.max(w, h) * 0.65);
+                rayGrad.addColorStop(0, 'rgba(56, 189, 248, 0.22)');
+                rayGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+                ctx.fillStyle = rayGrad;
+                ctx.beginPath();
+                ctx.moveTo(-4, 0);
+                ctx.lineTo(4, 0);
+                ctx.lineTo(18, -Math.max(w, h) * 0.65);
+                ctx.lineTo(-18, -Math.max(w, h) * 0.65);
+                ctx.closePath();
+                ctx.fill();
+            }
+            ctx.restore();
+
+            // Glowing star particles
+            let seed = 4219;
+            const nextRand = () => {
+                seed = (seed * 1664525 + 1013904223) >>> 0;
+                return seed / 4294967296;
+            };
+            for (let i = 0; i < 95; i++) {
+                const sx = nextRand() * w;
+                const sy = nextRand() * h * 0.75;
+                const sr = 0.8 + nextRand() * 2.2;
+                ctx.fillStyle = i % 3 === 0 ? 'rgba(125, 211, 252, 0.85)' : 'rgba(255, 255, 255, 0.75)';
+                ctx.beginPath();
+                ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Neon cyan orbital rings around title
+            const titleY = h * 0.26;
+            const rx = Math.min(w * 0.43, 250);
+            const ry = Math.min(h * 0.075, 54);
+            ctx.save();
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 3.5;
+            ctx.shadowColor = '#38bdf8';
+            ctx.shadowBlur = 18;
+            ctx.beginPath();
+            ctx.ellipse(w * 0.5, titleY + 6, rx, ry, -0.05, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(w * 0.5, titleY - 12, rx * 0.94, ry * 0.82, 0.04, Math.PI * 0.9, Math.PI * 2.1);
+            ctx.stroke();
+            ctx.restore();
+
+            // Isometric 3D floor grid & glowing dice cluster
+            const cx = w * 0.5;
+            const baseY = h * 0.72;
+            const tileW = Math.min(w * 0.16, 76);
+            const tileH = tileW * 0.52;
+
+            for (let gz = -2; gz <= 2; gz++) {
+                for (let gx = -2; gx <= 2; gx++) {
+                    const ix = cx + (gx - gz) * tileW * 0.52;
+                    const iy = baseY + (gx + gz) * tileH * 0.52;
+                    ctx.fillStyle = (gx + gz) % 2 === 0 ? 'rgba(14, 42, 108, 0.82)' : 'rgba(10, 28, 78, 0.86)';
+                    ctx.strokeStyle = 'rgba(56, 189, 248, 0.55)';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(ix, iy - tileH * 0.5);
+                    ctx.lineTo(ix + tileW * 0.5, iy);
+                    ctx.lineTo(ix, iy + tileH * 0.5);
+                    ctx.lineTo(ix - tileW * 0.5, iy);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                }
+            }
+
+            // Helper to draw isometric 3D die
+            const drawIsoDie = (gx, gz, scale = 1, topPipColor = '#0f172a', topPips = [[0, 0]]) => {
+                const ix = cx + (gx - gz) * tileW * 0.52;
+                const iy = baseY + (gx + gz) * tileH * 0.52;
+                const s = tileW * 0.48 * scale;
+                const th = tileH * 0.48 * scale;
+                const hDie = s * 0.95;
+
+                // Top face
+                ctx.fillStyle = '#f8fafc';
+                ctx.strokeStyle = '#0f172a';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(ix, iy - hDie - th);
+                ctx.lineTo(ix + s, iy - hDie);
+                ctx.lineTo(ix, iy - hDie + th);
+                ctx.lineTo(ix - s, iy - hDie);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Left face
+                ctx.fillStyle = '#cbd5e1';
+                ctx.beginPath();
+                ctx.moveTo(ix - s, iy - hDie);
+                ctx.lineTo(ix, iy - hDie + th);
+                ctx.lineTo(ix, iy + th);
+                ctx.lineTo(ix - s, iy);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Right face
+                ctx.fillStyle = '#94a3b8';
+                ctx.beginPath();
+                ctx.moveTo(ix, iy - hDie + th);
+                ctx.lineTo(ix + s, iy - hDie);
+                ctx.lineTo(ix + s, iy);
+                ctx.lineTo(ix, iy + th);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Top pips
+                ctx.fillStyle = topPipColor;
+                topPips.forEach(([px, py]) => {
+                    ctx.beginPath();
+                    ctx.ellipse(ix + px * s * 0.42, iy - hDie + py * th * 0.42, s * 0.14, th * 0.16, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                // Front-left diagonal pips (3)
+                ctx.fillStyle = '#0f172a';
+                [[-0.5, -0.35], [0, 0], [0.5, 0.35]].forEach(([px, py]) => {
+                    ctx.beginPath();
+                    ctx.arc(ix - s * 0.5 + px * s * 0.42, iy - hDie * 0.45 + py * hDie * 0.42, s * 0.085, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            };
+
+            drawIsoDie(-1.1, -0.4, 0.92, '#f43f5e', [[0, 0]]);
+            drawIsoDie(0.95, -0.5, 0.92, '#0f172a', [[-0.45, -0.45], [0.45, 0.45]]);
+            drawIsoDie(0, 0.25, 1.18, '#0f172a', [[-0.45, -0.45], [0, 0], [0.45, 0.45]]);
+
+            // Stylized hero standing on center die
+            const heroBaseY = baseY + 0.25 * tileH * 0.52 - tileW * 0.48 * 1.18 * 0.95;
+            const hs = Math.min(w * 0.11, 46);
+            ctx.save();
+            ctx.shadowColor = '#38bdf8';
+            ctx.shadowBlur = 22;
+
+            // Shoes & legs
+            ctx.fillStyle = '#fbbf24';
+            ctx.fillRect(cx - hs * 0.34, heroBaseY - hs * 0.16, hs * 0.28, hs * 0.16);
+            ctx.fillRect(cx + hs * 0.06, heroBaseY - hs * 0.16, hs * 0.28, hs * 0.16);
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(cx - hs * 0.3, heroBaseY - hs * 0.46, hs * 0.22, hs * 0.3);
+            ctx.fillRect(cx + hs * 0.08, heroBaseY - hs * 0.46, hs * 0.22, hs * 0.3);
+
+            // Blue jacket & gold collar
+            ctx.fillStyle = '#2563eb';
+            ctx.beginPath();
+            ctx.roundRect(cx - hs * 0.44, heroBaseY - hs * 1.05, hs * 0.88, hs * 0.62, 12);
+            ctx.fill();
+            ctx.fillStyle = '#fbbf24';
+            ctx.beginPath();
+            ctx.roundRect(cx - hs * 0.28, heroBaseY - hs * 1.14, hs * 0.56, hs * 0.14, 7);
+            ctx.fill();
+
+            // Head & brown hair
+            ctx.fillStyle = '#f0bd91';
+            ctx.beginPath();
+            ctx.arc(cx, heroBaseY - hs * 1.42, hs * 0.34, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#452715';
+            ctx.beginPath();
+            ctx.arc(cx, heroBaseY - hs * 1.5, hs * 0.36, Math.PI, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // 3D "DICE ROLL 3D" Title Banner
+            const fontSize = Math.min(w * 0.16, 76);
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = `900 ${fontSize}px "Segoe UI", system-ui, sans-serif`;
+
+            // "DICE"
+            ctx.lineWidth = 10;
+            ctx.strokeStyle = '#04143c';
+            ctx.strokeText('DICE', w * 0.5, titleY - fontSize * 0.52);
+            const diceGrad = ctx.createLinearGradient(0, titleY - fontSize, 0, titleY);
+            diceGrad.addColorStop(0, '#a5f3fc');
+            diceGrad.addColorStop(0.5, '#38bdf8');
+            diceGrad.addColorStop(1, '#0284c7');
+            ctx.fillStyle = diceGrad;
+            ctx.fillText('DICE', w * 0.5, titleY - fontSize * 0.52);
+
+            // "ROLL 3D"
+            const rollText = 'ROLL ';
+            const threeDText = '3D';
+            const rollW = ctx.measureText(rollText).width;
+            const threeDW = ctx.measureText(threeDText).width;
+            const startX = w * 0.5 - (rollW + threeDW) * 0.5;
+
+            ctx.textAlign = 'left';
+            ctx.strokeText(rollText, startX, titleY + fontSize * 0.46);
+            const rollGrad = ctx.createLinearGradient(0, titleY, 0, titleY + fontSize);
+            rollGrad.addColorStop(0, '#ffffff');
+            rollGrad.addColorStop(1, '#cbd5e1');
+            ctx.fillStyle = rollGrad;
+            ctx.fillText(rollText, startX, titleY + fontSize * 0.46);
+
+            ctx.strokeText(threeDText, startX + rollW, titleY + fontSize * 0.46);
+            const goldGrad = ctx.createLinearGradient(0, titleY, 0, titleY + fontSize);
+            goldGrad.addColorStop(0, '#fef08a');
+            goldGrad.addColorStop(0.5, '#f59e0b');
+            goldGrad.addColorStop(1, '#b45309');
+            ctx.fillStyle = goldGrad;
+            ctx.fillText(threeDText, startX + rollW, titleY + fontSize * 0.46);
+            ctx.restore();
+
+            ctx.restore();
+        }
+
+        function dismissSplashScreen(e) {
+            if (!isSplashActive) return;
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            isSplashActive = false;
+            try {
+                sfx.ensureContext();
+                sfx.step();
+            } catch (err) {}
+
+            if (splashScreen) {
+                splashScreen.classList.add('dismissed');
+                splashScreen.setAttribute('aria-hidden', 'true');
+            }
+            isPaused = true;
+            showModal();
+        }
+
+        if (splashImg && splashScreen) {
+            splashImg.addEventListener('error', () => {
+                splashScreen.classList.add('use-fallback');
+                renderSplashFallbackArtwork();
+            });
+            if (splashImg.complete && splashImg.naturalWidth === 0) {
+                splashScreen.classList.add('use-fallback');
+                renderSplashFallbackArtwork();
+            }
+        }
+
+        let toastTimeout = null;
+        function showToast(msg) {
+            if (!comboToast) return;
+            comboToast.textContent = msg;
+            comboToast.classList.add('show');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                comboToast.classList.remove('show');
+            }, 2200);
+        }
+
+        // Web Audio Sound Synthesizer
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+
+            ensureContext() {
+                if (!this.enabled) return;
+                try {
+                    if (!this.ctx) {
+                        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                        if (AudioCtx) this.ctx = new AudioCtx();
+                    }
+                    if (this.ctx && this.ctx.state === 'suspended') {
+                        this.ctx.resume().catch(() => {});
+                    }
+                } catch (err) {}
+            }
+
+            playTone(freq, type, duration, vol = 0.14, slideTo = null) {
+                if (!this.enabled) return;
+                this.ensureContext();
+                if (!this.ctx) return;
+
+                try {
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, now);
+                    if (slideTo) {
+                        osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), now + duration);
+                    }
+                    gain.gain.setValueAtTime(vol, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + duration);
+                } catch (err) {}
+            }
+
+            roll() { this.playTone(190, 'triangle', 0.11, 0.16, 105); }
+            step() { this.playTone(320, 'sine', 0.06, 0.08, 410); }
+            hop(up) { this.playTone(up ? 260 : 440, 'sine', 0.14, 0.14, up ? 520 : 210); }
+            spawn() { this.playTone(140, 'sine', 0.18, 0.08, 220); }
+            match(chain = 1) {
+                const base = 360 + Math.min(chain - 1, 8) * 75;
+                this.playTone(base, 'triangle', 0.18, 0.18, base * 1.25);
+                setTimeout(() => this.playTone(base * 1.5, 'sine', 0.24, 0.15, base * 1.8), 70);
+            }
+            victory() {
+                this.playTone(440, 'triangle', 0.16, 0.18, 554);
+                setTimeout(() => this.playTone(554, 'triangle', 0.16, 0.18, 659), 110);
+                setTimeout(() => this.playTone(659, 'sine', 0.34, 0.2, 880), 220);
+            }
+            gameOver() {
+                this.playTone(300, 'sawtooth', 0.25, 0.14, 180);
+                setTimeout(() => this.playTone(220, 'sawtooth', 0.38, 0.14, 110), 180);
+            }
+        }
+
+        const sfx = new SoundEngine();
+
+        // Constants & 3D Scene Globals
+        const GRID_SIZE = 7;
+        const TILE_SIZE = 1.05;
+        const DIE_SIZE = 0.94;
+        const HALF_DIE = DIE_SIZE / 2;
+        const CHARACTER_SCALE = 1.525; // Enlarged by 25% (1.22 * 1.25 = 1.525)
+        const SINK_DURATION = 2.4;
+        const TOTAL_PUZZLES = 100;
+        const STORAGE_KEY = 'diceRoll3d_puzzleProgress';
+
+        let scene = null;
+        let camera = null;
+        let renderer = null;
+        let tileMeshes = [];
+        let playerGroup = null;
+        let bodyMesh = null;
+        let headMesh = null;
+        let visorMesh = null;
+        let eyeMeshes = [];
+        let leftArmPivot = null;
+        let rightArmPivot = null;
+        let leftLegPivot = null;
+        let rightLegPivot = null;
+        let threeReady = false;
+        let targetPlayerYaw = 0;
+
+        const PARTICLE_POOL_SIZE = 36;
+        const particlePool = [];
+        let sharedDieGeometry = null;
+        let sharedParticleGeometry = null;
+
+        let camYaw = 0;
+        let camPitch = 1.08;
+        const MIN_CAM_DIST = 7.0;
+        const MAX_CAM_DIST = 20.0;
+        const BASE_CAM_DIST = 14.4;
+        let camDist = BASE_CAM_DIST;
+        let userZoomed = false;
+
+        function computeDefaultCamDist() {
+            const aspect = Math.max(0.4, window.innerWidth / Math.max(1, window.innerHeight));
+            if (aspect < 1) {
+                return Math.min(MAX_CAM_DIST, BASE_CAM_DIST + (1 - aspect) * 4.2);
+            }
+            return BASE_CAM_DIST;
+        }
+        camDist = computeDefaultCamDist();
+
+        // Puzzle Progress Persistence
+        function loadPuzzleProgress() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && typeof parsed === 'object') {
+                        return {
+                            unlocked: Math.max(1, Math.min(TOTAL_PUZZLES, Number(parsed.unlocked) || 1)),
+                            completed: (parsed.completed && typeof parsed.completed === 'object') ? parsed.completed : {}
+                        };
+                    }
+                }
+            } catch (e) {}
+            return { unlocked: 1, completed: {} };
+        }
+
+        function savePuzzleProgress() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(puzzleProgress));
+            } catch (e) {}
+        }
+
+        let puzzleProgress = loadPuzzleProgress();
+        let gameMode = 'puzzle';
+        let currentPuzzleIndex = Math.min(puzzleProgress.unlocked, TOTAL_PUZZLES);
+        let puzzleMoves = 0;
+        let puzzleVictoryTriggered = false;
+
+        // Die Face Texture Cache
+        const faceTextureCache = {};
+        function getFaceTexture(faceNum) {
+            if (!threeReady) return null;
+            if (faceTextureCache[faceNum]) return faceTextureCache[faceNum];
+
+            const size = 256;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, size, size);
+
+            const pad = 16;
+            const r = 30;
+            ctx.fillStyle = '#f8fafc';
+            ctx.beginPath();
+            ctx.moveTo(pad + r, pad);
+            ctx.lineTo(size - pad - r, pad);
+            ctx.quadraticCurveTo(size - pad, pad, size - pad, pad + r);
+            ctx.lineTo(size - pad, size - pad - r);
+            ctx.quadraticCurveTo(size - pad, size - pad, size - pad - r, size - pad);
+            ctx.lineTo(pad + r, size - pad);
+            ctx.quadraticCurveTo(pad, size - pad, pad, size - pad - r);
+            ctx.lineTo(pad, pad + r);
+            ctx.quadraticCurveTo(pad, pad, pad + r, pad);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = faceNum === 1 ? '#f43f5e' : (faceNum === 6 ? '#0284c7' : '#0f172a');
+            const pipR = faceNum === 1 ? 34 : 22;
+            const c = size / 2;
+            const off = 56;
+
+            const layouts = {
+                1: [[c, c]],
+                2: [[c - off, c - off], [c + off, c + off]],
+                3: [[c - off, c - off], [c, c], [c + off, c + off]],
+                4: [[c - off, c - off], [c + off, c - off], [c - off, c + off], [c + off, c + off]],
+                5: [[c - off, c - off], [c + off, c - off], [c, c], [c - off, c + off], [c + off, c + off]],
+                6: [[c - off, c - off], [c + off, c - off], [c - off, c], [c + off, c], [c - off, c + off], [c + off, c + off]]
+            };
+
+            (layouts[faceNum] || []).forEach(([px, py]) => {
+                ctx.beginPath();
+                ctx.arc(px, py, pipR, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.anisotropy = 4;
+            tex.needsUpdate = true;
+            faceTextureCache[faceNum] = tex;
+            return tex;
+        }
+
+        const CANONICAL_FACES = [3, 4, 1, 6, 5, 2];
+
+        function createDieMaterials() {
+            return CANONICAL_FACES.map(faceNum => {
+                return new THREE.MeshStandardMaterial({
+                    map: getFaceTexture(faceNum),
+                    roughness: 0.35,
+                    metalness: 0.05,
+                    emissive: new THREE.Color(0x000000),
+                    emissiveIntensity: 0
+                });
+            });
+        }
+
+        function buildStandaloneDieMesh() {
+            const geo = sharedDieGeometry || new THREE.BoxGeometry(DIE_SIZE, DIE_SIZE, DIE_SIZE);
+            const mesh = new THREE.Mesh(geo, createDieMaterials());
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.visible = true;
+            return mesh;
+        }
+
+        function initObjectPools() {
+            if (!threeReady || !scene) return;
+            sharedDieGeometry = new THREE.BoxGeometry(DIE_SIZE, DIE_SIZE, DIE_SIZE);
+            sharedParticleGeometry = new THREE.BoxGeometry(0.14, 0.14, 0.14);
+
+            for (let f = 1; f <= 6; f++) {
+                getFaceTexture(f);
+            }
+
+            for (let i = 0; i < PARTICLE_POOL_SIZE; i++) {
+                const pMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0 });
+                const pMesh = new THREE.Mesh(sharedParticleGeometry, pMat);
+                pMesh.visible = false;
+                scene.add(pMesh);
+                particlePool.push({
+                    mesh: pMesh,
+                    active: false,
+                    age: 0,
+                    life: 0.45,
+                    vx: 0,
+                    vy: 0,
+                    vz: 0
+                });
+            }
+        }
+
+        function spawnMatchBurst(wx, wy, wz, colorHex) {
+            if (!threeReady || particlePool.length === 0) return;
+            let spawned = 0;
+            for (let i = 0; i < particlePool.length && spawned < 6; i++) {
+                const p = particlePool[i];
+                if (!p.active) {
+                    const angle = (spawned / 6) * Math.PI * 2 + 0.25;
+                    p.active = true;
+                    p.age = 0;
+                    p.life = 0.42;
+                    p.vx = Math.cos(angle) * 2.4;
+                    p.vy = 2.6 + (spawned % 2) * 0.8;
+                    p.vz = Math.sin(angle) * 2.4;
+                    p.mesh.material.color.setHex(colorHex);
+                    p.mesh.material.opacity = 0.9;
+                    p.mesh.position.set(wx, wy, wz);
+                    p.mesh.scale.set(1, 1, 1);
+                    p.mesh.visible = true;
+                    spawned++;
+                }
+            }
+        }
+
+        function updateParticles(dt) {
+            if (!threeReady) return;
+            for (let i = 0; i < particlePool.length; i++) {
+                const p = particlePool[i];
+                if (!p.active) continue;
+                p.age += dt;
+                if (p.age >= p.life) {
+                    p.active = false;
+                    p.mesh.visible = false;
+                    p.mesh.material.opacity = 0;
+                    continue;
+                }
+                const ratio = p.age / p.life;
+                p.vy -= 9.5 * dt;
+                p.mesh.position.x += p.vx * dt;
+                p.mesh.position.y = Math.max(0.05, p.mesh.position.y + p.vy * dt);
+                p.mesh.position.z += p.vz * dt;
+                p.mesh.scale.setScalar(Math.max(0.1, 1 - ratio * 0.75));
+                p.mesh.material.opacity = 0.9 * (1 - ratio);
+            }
+        }
+
+        function gridToWorld(gx, gz) {
+            const offset = ((GRID_SIZE - 1) * TILE_SIZE) / 2;
+            return {
+                x: gx * TILE_SIZE - offset,
+                z: gz * TILE_SIZE - offset
+            };
+        }
+
+        function setPlayerWorldPos(x, y, z) {
+            if (!threeReady || !playerGroup) return;
+            playerGroup.position.set(x, y, z);
+        }
+
+        function buildAnimatedManCharacter() {
+            const group = new THREE.Group();
+            group.scale.setScalar(CHARACTER_SCALE);
+
+            const mat = (color, roughness = 0.48, metalness = 0.02) =>
+                new THREE.MeshStandardMaterial({ color, roughness, metalness });
+            const skinMat = mat(0xf0bd91, 0.48);
+            const jacketMat = mat(0x2463d7, 0.38, 0.06);
+            const jacketDark = mat(0x1746a4, 0.44);
+            const trimMat = mat(0x45d5ff, 0.3, 0.12);
+            const pantsMat = mat(0x263248, 0.58);
+            const shoeMat = mat(0xf7b928, 0.34, 0.08);
+            const shoeDark = mat(0x9b6410, 0.48);
+            const hairMat = mat(0x302016, 0.72);
+            const hairHighlight = mat(0x513522, 0.58);
+            const whiteMat = mat(0xffffff, 0.18);
+            const eyeMat = mat(0x182234, 0.2);
+            const mouthMat = mat(0x8e493d, 0.7);
+
+            function mesh(geometry, material, parent, pos, scale, cast = true) {
+                const m = new THREE.Mesh(geometry, material);
+                if (pos) m.position.set(pos[0], pos[1], pos[2]);
+                if (scale) m.scale.set(scale[0], scale[1], scale[2]);
+                m.castShadow = cast;
+                m.receiveShadow = true;
+                parent.add(m);
+                return m;
+            }
+            const sphereGeo = new THREE.SphereGeometry(1, 24, 18);
+            const cylinderGeo = (rTop, rBottom, h) => new THREE.CylinderGeometry(rTop, rBottom, h, 12);
+
+            // Legs with rounded-looking joints and chunky trainers.
+            const legGeo = cylinderGeo(0.052, 0.064, 0.22);
+            const lLegPivot = new THREE.Group();
+            lLegPivot.position.set(-0.068, 0.255, 0);
+            const rLegPivot = new THREE.Group();
+            rLegPivot.position.set(0.068, 0.255, 0);
+            [lLegPivot, rLegPivot].forEach(p => group.add(p));
+            mesh(legGeo, pantsMat, lLegPivot, [0, -0.11, 0], null);
+            mesh(legGeo, pantsMat, rLegPivot, [0, -0.11, 0], null);
+            mesh(sphereGeo, pantsMat, lLegPivot, [0, -0.035, 0], [0.066, 0.07, 0.068]);
+            mesh(sphereGeo, pantsMat, rLegPivot, [0, -0.035, 0], [0.066, 0.07, 0.068]);
+            const shoeGeo = new THREE.BoxGeometry(0.12, 0.075, 0.17);
+            const soleGeo = new THREE.BoxGeometry(0.122, 0.025, 0.176);
+            [lLegPivot, rLegPivot].forEach(p => {
+                mesh(shoeGeo, shoeMat, p, [0, -0.225, -0.035]);
+                mesh(soleGeo, shoeDark, p, [0, -0.263, -0.035]);
+                mesh(new THREE.BoxGeometry(0.075, 0.012, 0.035), whiteMat, p, [0, -0.205, -0.112], null, false);
+            });
+
+            // Rounded jacket body and layered details.
+            const upperBodyPivot = new THREE.Group();
+            upperBodyPivot.position.set(0, 0.39, 0);
+            group.add(upperBodyPivot);
+            const torso = mesh(sphereGeo, jacketMat, upperBodyPivot, [0, 0, 0], [0.145, 0.17, 0.095]);
+            mesh(new THREE.BoxGeometry(0.19, 0.045, 0.11), jacketDark, upperBodyPivot, [0, -0.105, 0], [1, 1, 1]);
+            // Front zip and jacket seams
+            mesh(new THREE.BoxGeometry(0.012, 0.19, 0.012), trimMat, upperBodyPivot, [0, 0, -0.091], null, false);
+            mesh(new THREE.BoxGeometry(0.04, 0.028, 0.014), shoeMat, upperBodyPivot, [0, -0.06, -0.095], null, false);
+            mesh(new THREE.BoxGeometry(0.065, 0.05, 0.025), trimMat, upperBodyPivot, [-0.055, 0.105, -0.065], null, false).rotation.z = 0.35;
+            mesh(new THREE.BoxGeometry(0.065, 0.05, 0.025), trimMat, upperBodyPivot, [0.055, 0.105, -0.065], null, false).rotation.z = -0.35;
+            mesh(sphereGeo, shoeMat, upperBodyPivot, [0, 0.145, -0.015], [0.12, 0.04, 0.12]); // neck scarf/collar
+            mesh(sphereGeo, skinMat, upperBodyPivot, [0, 0.205, 0], [0.055, 0.065, 0.055]); // neck
+
+            // Arms: articulated shoulder pivots, sleeves, cuffs, and hands.
+            const armGeo = cylinderGeo(0.043, 0.05, 0.19);
+            const handGeo = new THREE.SphereGeometry(0.047, 16, 12);
+            const lArmPivot = new THREE.Group();
+            const rArmPivot = new THREE.Group();
+            lArmPivot.position.set(-0.155, 0.095, 0);
+            rArmPivot.position.set(0.155, 0.095, 0);
+            upperBodyPivot.add(lArmPivot, rArmPivot);
+            [lArmPivot, rArmPivot].forEach((p, i) => {
+                const side = i === 0 ? -1 : 1;
+                mesh(sphereGeo, jacketMat, p, [0, -0.04, 0], [0.052, 0.065, 0.052]);
+                mesh(armGeo, jacketMat, p, [0, -0.115, 0]);
+                mesh(cylinderGeo(0.047, 0.047, 0.035), trimMat, p, [0, -0.205, 0]);
+                mesh(handGeo, skinMat, p, [0, -0.25, -0.005]);
+                // Small thumb gives the hand a less toy-like silhouette.
+                mesh(sphereGeo, skinMat, p, [side * 0.034, -0.245, -0.015], [0.023, 0.028, 0.025]);
+            });
+
+            // Head, ears, facial features, and textured-looking hair silhouette.
+            const headGroup = new THREE.Group();
+            headGroup.position.set(0, 0.285, 0);
+            upperBodyPivot.add(headGroup);
+            const head = mesh(sphereGeo, skinMat, headGroup, [0, 0, 0], [0.128, 0.145, 0.119]);
+            mesh(sphereGeo, skinMat, headGroup, [-0.126, -0.005, 0], [0.027, 0.039, 0.025]);
+            mesh(sphereGeo, skinMat, headGroup, [0.126, -0.005, 0], [0.027, 0.039, 0.025]);
+            // Hair cap and locks, shaped to frame the face rather than a flat box.
+            mesh(sphereGeo, hairMat, headGroup, [0, 0.075, 0.005], [0.132, 0.09, 0.124]);
+            mesh(sphereGeo, hairMat, headGroup, [0, 0.052, -0.082], [0.125, 0.07, 0.054]);
+            // Add a fuller rear hair mass and nape locks so the back of the head is covered too.
+            mesh(sphereGeo, hairMat, headGroup, [0, 0.015, 0.078], [0.12, 0.12, 0.07]);
+            mesh(sphereGeo, hairMat, headGroup, [0, -0.055, 0.075], [0.105, 0.075, 0.068]);
+            mesh(sphereGeo, hairMat, headGroup, [-0.075, -0.045, 0.06], [0.045, 0.075, 0.055]);
+            mesh(sphereGeo, hairMat, headGroup, [0.075, -0.045, 0.06], [0.045, 0.075, 0.055]);
+            mesh(sphereGeo, hairHighlight, headGroup, [-0.07, 0.105, -0.025], [0.046, 0.038, 0.048]);
+            mesh(sphereGeo, hairHighlight, headGroup, [0.055, 0.11, 0.005], [0.04, 0.034, 0.043]);
+            mesh(sphereGeo, hairMat, headGroup, [-0.105, 0.025, 0.035], [0.035, 0.07, 0.055]);
+            mesh(sphereGeo, hairMat, headGroup, [0.105, 0.025, 0.035], [0.035, 0.07, 0.055]);
+
+            const eyes = [];
+            [-0.043, 0.043].forEach((x) => {
+                const eyeGroup = new THREE.Group();
+                eyeGroup.position.set(x, 0.005, -0.105);
+                headGroup.add(eyeGroup);
+                mesh(sphereGeo, whiteMat, eyeGroup, [0, 0, 0], [0.027, 0.029, 0.018]);
+                mesh(sphereGeo, eyeMat, eyeGroup, [0, -0.002, -0.015], [0.014, 0.017, 0.01]);
+                mesh(sphereGeo, whiteMat, eyeGroup, [0.004, 0.006, -0.023], [0.005, 0.006, 0.004], false);
+                mesh(new THREE.BoxGeometry(0.038, 0.009, 0.014), hairMat, eyeGroup, [0, 0.039, 0], null, false);
+                eyes.push(eyeGroup);
+            });
+            // Nose and smile, subtle so they remain readable at game camera distance.
+            mesh(sphereGeo, skinMat, headGroup, [0, -0.025, -0.12], [0.018, 0.023, 0.018]);
+            mesh(new THREE.BoxGeometry(0.032, 0.006, 0.008), mouthMat, headGroup, [0, -0.075, -0.113], null, false);
+            mesh(sphereGeo, skinMat, headGroup, [-0.045, -0.045, -0.105], [0.022, 0.012, 0.006], false);
+            mesh(sphereGeo, skinMat, headGroup, [0.045, -0.045, -0.105], [0.022, 0.012, 0.006], false);
+
+            return {
+                group, upperBodyPivot, headGroup, torso, head,
+                scarf: upperBodyPivot.children[upperBodyPivot.children.length - 1],
+                eyes, lArmPivot, rArmPivot, lLegPivot, rLegPivot,
+                baseUpperBodyY: 0.39
+            };
+        }
+
+        let manRig = null;
+
+        function updateCharacterAnimation(currentNow, isMoving, isRidingRoll) {
+            if (!threeReady || !manRig) return;
+
+            if (isMoving) {
+                const stridePhase = currentNow * 0.022;
+                const swing = Math.sin(stridePhase) * 0.72;
+                const bounce = Math.abs(Math.cos(stridePhase)) * 0.035;
+
+                manRig.lLegPivot.rotation.x = swing;
+                manRig.rLegPivot.rotation.x = -swing;
+                manRig.lArmPivot.rotation.x = -swing * 0.85;
+                manRig.rArmPivot.rotation.x = swing * 0.85;
+
+                manRig.upperBodyPivot.position.y = manRig.baseUpperBodyY + bounce;
+                manRig.upperBodyPivot.rotation.x = 0.06;
+                manRig.headGroup.rotation.x = -0.04;
+            } else if (isRidingRoll) {
+                const lean = Math.sin(currentNow * 0.025) * 0.14;
+                manRig.upperBodyPivot.position.y = manRig.baseUpperBodyY;
+                manRig.upperBodyPivot.rotation.x = 0.22 + lean * 0.35;
+                manRig.headGroup.rotation.x = -0.14;
+                manRig.lArmPivot.rotation.x = -0.55 + lean;
+                manRig.rArmPivot.rotation.x = -0.55 - lean;
+                manRig.lLegPivot.rotation.x = -0.25;
+                manRig.rLegPivot.rotation.x = 0.2;
+            } else {
+                const breath = Math.sin(currentNow * 0.0045);
+                const bob = breath * 0.012;
+
+                manRig.upperBodyPivot.position.y = manRig.baseUpperBodyY + bob;
+                manRig.upperBodyPivot.rotation.x = breath * 0.02;
+                manRig.headGroup.rotation.x = 0;
+                manRig.lLegPivot.rotation.x = 0;
+                manRig.rLegPivot.rotation.x = 0;
+                manRig.lArmPivot.rotation.x = breath * 0.08;
+                manRig.rArmPivot.rotation.x = -breath * 0.08;
+            }
+        }
+
+        function initThreeScene() {
+            if (threeReady) return;
+            try {
+                if (typeof THREE === 'undefined' || !container) {
+                    threeReady = false;
+                    if (bootStatus) bootStatus.textContent = 'Ready — logic fallback active.';
+                    return;
+                }
+
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x0f172a);
+                scene.fog = new THREE.FogExp2(0x0f172a, 0.032);
+
+                const w = Math.max(1, window.innerWidth);
+                const h = Math.max(1, window.innerHeight);
+                camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
+
+                renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+                renderer.setSize(w, h);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+                container.innerHTML = '';
+                container.appendChild(renderer.domElement);
+
+                const ambient = new THREE.AmbientLight(0xe2e8f0, 0.78);
+                scene.add(ambient);
+
+                const dirLight = new THREE.DirectionalLight(0xffffff, 1.05);
+                dirLight.position.set(7, 14, 9);
+                dirLight.castShadow = true;
+                dirLight.shadow.mapSize.width = 1024;
+                dirLight.shadow.mapSize.height = 1024;
+                dirLight.shadow.camera.near = 2;
+                dirLight.shadow.camera.far = 35;
+                const d = 6.5;
+                dirLight.shadow.camera.left = -d;
+                dirLight.shadow.camera.right = d;
+                dirLight.shadow.camera.top = d;
+                dirLight.shadow.camera.bottom = -d;
+                scene.add(dirLight);
+
+                const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.45);
+                rimLight.position.set(-8, 6, -8);
+                scene.add(rimLight);
+
+                const boardBaseGeo = new THREE.BoxGeometry(
+                    GRID_SIZE * TILE_SIZE + 0.5,
+                    0.4,
+                    GRID_SIZE * TILE_SIZE + 0.5
+                );
+                const boardBaseMat = new THREE.MeshStandardMaterial({
+                    color: 0x090d16,
+                    roughness: 0.7,
+                    metalness: 0.2
+                });
+                const boardBase = new THREE.Mesh(boardBaseGeo, boardBaseMat);
+                boardBase.position.set(0, -0.26, 0);
+                boardBase.receiveShadow = true;
+                scene.add(boardBase);
+
+                const tileGeo = new THREE.BoxGeometry(TILE_SIZE * 0.94, 0.12, TILE_SIZE * 0.94);
+                tileMeshes = [];
+                for (let gz = 0; gz < GRID_SIZE; gz++) {
+                    const row = [];
+                    for (let gx = 0; gx < GRID_SIZE; gx++) {
+                        const isAlt = (gx + gz) % 2 === 0;
+                        const baseColor = isAlt ? 0x1e293b : 0x263449;
+                        const tileMat = new THREE.MeshStandardMaterial({
+                            color: baseColor,
+                            roughness: 0.55,
+                            metalness: 0.1,
+                            emissive: new THREE.Color(0x000000),
+                            emissiveIntensity: 0
+                        });
+                        const tile = new THREE.Mesh(tileGeo, tileMat);
+                        const pos = gridToWorld(gx, gz);
+                        tile.position.set(pos.x, -0.06, pos.z);
+                        tile.receiveShadow = true;
+                        tile.userData = { gx, gz, baseColor };
+                        scene.add(tile);
+                        row.push(tile);
+                    }
+                    tileMeshes.push(row);
+                }
+
+                manRig = buildAnimatedManCharacter();
+                playerGroup = manRig.group;
+                bodyMesh = manRig.torso;
+                headMesh = manRig.head;
+                visorMesh = manRig.scarf;
+                eyeMeshes = manRig.eyes;
+                leftArmPivot = manRig.lArmPivot;
+                rightArmPivot = manRig.rArmPivot;
+                leftLegPivot = manRig.lLegPivot;
+                rightLegPivot = manRig.rLegPivot;
+
+                scene.add(playerGroup);
+
+                threeReady = true;
+                initObjectPools();
+                if (bootStatus) bootStatus.textContent = 'Ready — 3D animated man & 100 puzzles loaded.';
+            } catch (err) {
+                threeReady = false;
+                if (bootStatus) bootStatus.textContent = `3D init notice: ${err.message || err}`;
+            }
+        }
+
+        // Exact Die Orientation Math
+        const DIRS = {
+            N: { dx: 0, dz: -1, yaw: 0, opp: 'S' },
+            S: { dx: 0, dz: 1, yaw: Math.PI, opp: 'N' },
+            E: { dx: 1, dz: 0, yaw: -Math.PI / 2, opp: 'W' },
+            W: { dx: -1, dz: 0, yaw: Math.PI / 2, opp: 'E' }
+        };
+
+        const CARDINAL_VECTORS = [
+            { dir: 'N', x: 0, z: -1 },
+            { dir: 'E', x: 1, z: 0 },
+            { dir: 'S', x: 0, z: 1 },
+            { dir: 'W', x: -1, z: 0 }
+        ];
+
+        function resolveBoardDirection(screenDir) {
+            const forwardX = -Math.sin(camYaw);
+            const forwardZ = -Math.cos(camYaw);
+            const rightX = Math.cos(camYaw);
+            const rightZ = -Math.sin(camYaw);
+
+            let vx = forwardX;
+            let vz = forwardZ;
+            if (screenDir === 'DOWN') {
+                vx = -forwardX;
+                vz = -forwardZ;
+            } else if (screenDir === 'RIGHT') {
+                vx = rightX;
+                vz = rightZ;
+            } else if (screenDir === 'LEFT') {
+                vx = -rightX;
+                vz = -rightZ;
+            }
+
+            let bestDir = 'N';
+            let bestDot = -Infinity;
+            for (const c of CARDINAL_VECTORS) {
+                const dot = vx * c.x + vz * c.z;
+                if (dot > bestDot) {
+                    bestDot = dot;
+                    bestDir = c.dir;
+                }
+            }
+            return bestDir;
+        }
+
+        function syncDpadOrientation() {
+            if (!dpadContainer) return;
+            const deg = (camYaw * 180) / Math.PI;
+            dpadContainer.style.transform = `rotate(${deg.toFixed(2)}deg)`;
+        }
+
+        function rightHandEast(top, north) {
+            const vecMap = {
+                1: [0, 1, 0],  6: [0, -1, 0],
+                2: [0, 0, -1], 5: [0, 0, 1],
+                3: [1, 0, 0],  4: [-1, 0, 0]
+            };
+            const invMap = {
+                '0,1,0': 1,  '0,-1,0': 6,
+                '0,0,-1': 2, '0,0,1': 5,
+                '1,0,0': 3,  '-1,0,0': 4
+            };
+            const u = vecMap[top] || [0, 1, 0];
+            const f = vecMap[north] || [0, 0, -1];
+            const cx = f[1] * u[2] - f[2] * u[1];
+            const cy = f[2] * u[0] - f[0] * u[2];
+            const cz = f[0] * u[1] - f[1] * u[0];
+            return invMap[`${cx},${cy},${cz}`] || 3;
+        }
+
+        function sanitizeOrientation(ori) {
+            const fallback = { top: 1, north: 2, east: 3 };
+            if (!ori || typeof ori !== 'object') return fallback;
+
+            let top = Number(ori.top);
+            let north = Number(ori.north);
+            let east = Number(ori.east);
+
+            const valid = (n) => Number.isInteger(n) && n >= 1 && n <= 6;
+            if (!valid(top)) top = 1;
+            if (!valid(north) || north === top || north === 7 - top) {
+                north = (top === 2 || top === 5) ? 1 : 2;
+            }
+            const expectedEast = rightHandEast(top, north);
+            if (!valid(east) || east === top || east === 7 - top || east === north || east === 7 - north) {
+                east = expectedEast;
+            }
+
+            return { top, north, east };
+        }
+
+        function computeRolledOrientation(ori, dir) {
+            const { top, north, east } = sanitizeOrientation(ori);
+            const bottom = 7 - top;
+            const south = 7 - north;
+            const west = 7 - east;
+
+            if (dir === 'E') return sanitizeOrientation({ top: west,  north: north,  east: top });
+            if (dir === 'W') return sanitizeOrientation({ top: east,  north: north,  east: bottom });
+            if (dir === 'N') return sanitizeOrientation({ top: south, north: top,    east: east });
+            if (dir === 'S') return sanitizeOrientation({ top: north, north: bottom, east: east });
+            return { top, north, east };
+        }
+
+        function quaternionFromOrientation(ori) {
+            if (!threeReady) return null;
+            const { top, north, east } = sanitizeOrientation(ori);
+            const bottom = 7 - top;
+            const south = 7 - north;
+            const west = 7 - east;
+
+            const faceToWorldVec = {
+                [east]:   new THREE.Vector3(1, 0, 0),
+                [west]:   new THREE.Vector3(-1, 0, 0),
+                [top]:    new THREE.Vector3(0, 1, 0),
+                [bottom]: new THREE.Vector3(0, -1, 0),
+                [south]:  new THREE.Vector3(0, 0, 1),
+                [north]:  new THREE.Vector3(0, 0, -1)
+            };
+
+            const localXInWorld = (faceToWorldVec[3] || new THREE.Vector3(1, 0, 0)).clone().normalize();
+            const localYInWorld = (faceToWorldVec[1] || new THREE.Vector3(0, 1, 0)).clone().normalize();
+            const localZInWorld = (faceToWorldVec[5] || new THREE.Vector3(0, 0, 1)).clone().normalize();
+
+            const m = new THREE.Matrix4().makeBasis(localXInWorld, localYInWorld, localZInWorld);
+            const q = new THREE.Quaternion().setFromRotationMatrix(m);
+
+            if (
+                Number.isNaN(q.x) || Number.isNaN(q.y) ||
+                Number.isNaN(q.z) || Number.isNaN(q.w)
+            ) {
+                return new THREE.Quaternion();
+            }
+            return q;
+        }
+
+        // 100 Guaranteed-Solvable Puzzles
+        function createSeededRng(seed) {
+            let s = seed >>> 0;
+            return function () {
+                s = (s + 0x6D2B79F5) >>> 0;
+                let t = Math.imul(s ^ (s >>> 15), 1 | s);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        function orientationWithTop(topVal, rng) {
+            const validNorths = [1, 2, 3, 4, 5, 6].filter(f => f !== topVal && f !== 7 - topVal);
+            const north = validNorths[Math.floor(rng() * validNorths.length)];
+            return sanitizeOrientation({ top: topVal, north, east: rightHandEast(topVal, north) });
+        }
+
+        function boardHasImmediateMatch(diceArr) {
+            const map = new Map();
+            for (const d of diceArr) {
+                map.set(`${d.gx},${d.gz}`, d);
+            }
+            const visited = new Set();
+            for (const d of diceArr) {
+                const key = `${d.gx},${d.gz}`;
+                if (visited.has(key)) continue;
+                const val = d.orientation.top;
+                if (val < 2 || val > 6) continue;
+                const q = [d];
+                const cluster = [];
+                while (q.length > 0) {
+                    const cur = q.shift();
+                    const ck = `${cur.gx},${cur.gz}`;
+                    if (visited.has(ck)) continue;
+                    visited.add(ck);
+                    cluster.push(cur);
+                    for (const [dx, dz] of [[0, -1], [0, 1], [1, 0], [-1, 0]]) {
+                        const nb = map.get(`${cur.gx + dx},${cur.gz + dz}`);
+                        if (nb && nb.orientation.top === val && !visited.has(`${nb.gx},${nb.gz}`)) {
+                            q.push(nb);
+                        }
+                    }
+                }
+                if (cluster.length >= val) return true;
+            }
+            return false;
+        }
+
+        function growClusterCoords(cx, cz, count, occupiedSet, rng) {
+            const cells = [{ gx: cx, gz: cz }];
+            occupiedSet.add(`${cx},${cz}`);
+            let attempts = 0;
+            while (cells.length < count && attempts < 140) {
+                attempts++;
+                const base = cells[Math.floor(rng() * cells.length)];
+                const dirs = [[0, -1], [0, 1], [1, 0], [-1, 0]];
+                const [dx, dz] = dirs[Math.floor(rng() * 4)];
+                const nx = base.gx + dx;
+                const nz = base.gz + dz;
+                const k = `${nx},${nz}`;
+                if (nx >= 1 && nx <= 5 && nz >= 1 && nz <= 5 && !occupiedSet.has(k)) {
+                    occupiedSet.add(k);
+                    cells.push({ gx: nx, gz: nz });
+                }
+            }
+            return cells;
+        }
+
+        const puzzleCache = {};
+
+        function getPuzzleDefinition(levelNum) {
+            const idx = Math.max(1, Math.min(TOTAL_PUZZLES, levelNum));
+            if (puzzleCache[idx]) return puzzleCache[idx];
+
+            // Shift all original levels down by 1 (old Level 1 removed; old Level 2 -> 1, ..., old Level 100 -> 99, new Grandmaster Gauntlet -> 100)
+            const srcIdx = idx + 1;
+
+            if (srcIdx === 2) {
+                const oriA = sanitizeOrientation({ top: 3, north: 2, east: 6 });
+                const oriB = sanitizeOrientation({ top: 3, north: 1, east: 2 });
+                const oriC = sanitizeOrientation({ top: 3, north: 5, east: 1 });
+                const startA = computeRolledOrientation(oriA, 'N');
+                const startC = computeRolledOrientation(oriC, 'E');
+                const def = {
+                    level: idx,
+                    title: `Puzzle ${idx}: Trio of Threes`,
+                    subtitle: 'Connect all three 3s orthogonally to clear them together!',
+                    parMoves: 2,
+                    player: { gx: 3, gz: 1, onDie: true },
+                    dice: [
+                        { gx: 3, gz: 1, orientation: startA },
+                        { gx: 3, gz: 3, orientation: oriB },
+                        { gx: 5, gz: 3, orientation: startC }
+                    ]
+                };
+                puzzleCache[idx] = def;
+                return def;
+            }
+
+            if (srcIdx === 3) {
+                const o1 = sanitizeOrientation({ top: 4, north: 2, east: 1 });
+                const o2 = sanitizeOrientation({ top: 4, north: 1, east: 5 });
+                const o3 = sanitizeOrientation({ top: 4, north: 5, east: 6 });
+                const o4 = sanitizeOrientation({ top: 4, north: 6, east: 2 });
+                const s1 = computeRolledOrientation(o1, 'W');
+                const s4 = computeRolledOrientation(o4, 'S');
+                const def = {
+                    level: idx,
+                    title: `Puzzle ${idx}: Quad of Fours`,
+                    subtitle: 'Bring all four 4s together to trigger a 4-die sink!',
+                    parMoves: 2,
+                    player: { gx: 1, gz: 3, onDie: true },
+                    dice: [
+                        { gx: 1, gz: 3, orientation: s1 },
+                        { gx: 3, gz: 3, orientation: o2 },
+                        { gx: 2, gz: 4, orientation: o3 },
+                        { gx: 3, gz: 5, orientation: s4 }
+                    ]
+                };
+                puzzleCache[idx] = def;
+                return def;
+            }
+
+            let attemptOffset = 0;
+            while (attemptOffset < 60) {
+                const rng = createSeededRng(srcIdx * 7919 + 1337 + attemptOffset * 101);
+                attemptOffset++;
+
+                const occupied = new Set();
+                const solvedDice = [];
+                let subtitle = '';
+                let title = `Puzzle ${idx}`;
+
+                // Tier classification across shifted levels (srcIdx 4..101):
+                // 4-10: Tier 1 (Intro & small clusters)
+                // 11-22: Tier 2 (5s/6s, dual sets, basic 1s ignition)
+                // 23-36: Tier 3 (Split sets 3s & 4s, ember cascades, grand sixes)
+                // 37-50: Tier 4 (Advanced multi-clusters & cascades)
+                // 51-70: Tier 5 (Grand Multi-Sets & High Chains: 4s+5s, 3s+5s, dual 4s)
+                // 71-90: Tier 6 (Inferno Ignition & Triple Clusters: 4s/5s/6s + 1s, or 2s+3s+4s)
+                // 91-101: Tier 7 (Grandmaster Gauntlet: 5s/6s + cascading 1s, or 5s+6s dual sets)
+                const tier = srcIdx <= 10 ? 1
+                    : (srcIdx <= 22 ? 2
+                    : (srcIdx <= 36 ? 3
+                    : (srcIdx <= 50 ? 4
+                    : (srcIdx <= 70 ? 5
+                    : (srcIdx <= 90 ? 6 : 7)))));
+                const archetypeRoll = rng();
+
+                if (tier === 1) {
+                    if (srcIdx === 5 || srcIdx === 9) {
+                        const c2 = growClusterCoords(3, 3, 2, occupied, rng);
+                        if (c2.length < 2) continue;
+                        c2.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(2, rng) }));
+                        const adjDirs = [[0, -1], [0, 1], [1, 0], [-1, 0]];
+                        let placedOne = false;
+                        for (const [dx, dz] of adjDirs) {
+                            const nx = c2[0].gx + dx;
+                            const nz = c2[0].gz + dz;
+                            if (nx >= 1 && nx <= 5 && nz >= 1 && nz <= 5 && !occupied.has(`${nx},${nz}`)) {
+                                occupied.add(`${nx},${nz}`);
+                                solvedDice.push({ gx: nx, gz: nz, orientation: orientationWithTop(1, rng) });
+                                placedOne = true;
+                                break;
+                            }
+                        }
+                        if (!placedOne) continue;
+                        title = `Puzzle ${idx}: Spark of Ones`;
+                        subtitle = 'Match the 2s next to the 1 so the sinking 2s ignite the 1!';
+                    } else {
+                        const targetN = srcIdx <= 6 ? 3 : (srcIdx <= 8 ? 4 : 5);
+                        const cluster = growClusterCoords(3, 3, targetN, occupied, rng);
+                        if (cluster.length < targetN) continue;
+                        cluster.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(targetN, rng) }));
+                        title = `Puzzle ${idx}: Cluster of ${targetN}s`;
+                        subtitle = `Unite all ${targetN} dice showing ${targetN} on top!`;
+                    }
+                } else if (tier === 2) {
+                    if (archetypeRoll < 0.45) {
+                        const targetN = rng() < 0.55 ? 5 : 6;
+                        const cluster = growClusterCoords(3, 3, targetN, occupied, rng);
+                        if (cluster.length < targetN) continue;
+                        cluster.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(targetN, rng) }));
+                        title = `Puzzle ${idx}: ${targetN}-Die Alignment`;
+                        subtitle = `Roll and align ${targetN} matching ${targetN}s.`;
+                    } else if (archetypeRoll < 0.78) {
+                        const g1 = growClusterCoords(2, 2, 2, occupied, rng);
+                        const g2 = growClusterCoords(4, 4, 3, occupied, rng);
+                        if (g1.length < 2 || g2.length < 3) continue;
+                        g1.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(2, rng) }));
+                        g2.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(3, rng) }));
+                        title = `Puzzle ${idx}: Dual Sets (2s & 3s)`;
+                        subtitle = 'Clear both the pair of 2s and the trio of 3s!';
+                    } else {
+                        const g3 = growClusterCoords(3, 3, 3, occupied, rng);
+                        if (g3.length < 3) continue;
+                        g3.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(3, rng) }));
+                        let onesPlaced = 0;
+                        for (const anchor of g3) {
+                            for (const [dx, dz] of [[0, -1], [0, 1], [1, 0], [-1, 0]]) {
+                                if (onesPlaced >= 2) break;
+                                const nx = anchor.gx + dx;
+                                const nz = anchor.gz + dz;
+                                if (nx >= 1 && nx <= 5 && nz >= 1 && nz <= 5 && !occupied.has(`${nx},${nz}`)) {
+                                    occupied.add(`${nx},${nz}`);
+                                    solvedDice.push({ gx: nx, gz: nz, orientation: orientationWithTop(1, rng) });
+                                    onesPlaced++;
+                                }
+                            }
+                        }
+                        if (onesPlaced < 1) continue;
+                        title = `Puzzle ${idx}: Chain Ignition`;
+                        subtitle = 'Match the 3s while touching the 1s to clear everything!';
+                    }
+                } else if (tier === 3 || tier === 4) {
+                    if (archetypeRoll < 0.35) {
+                        const g1 = growClusterCoords(2, 2, 3, occupied, rng);
+                        const g2 = growClusterCoords(4, 4, 4, occupied, rng);
+                        if (g1.length < 3 || g2.length < 4) continue;
+                        g1.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(3, rng) }));
+                        g2.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(4, rng) }));
+                        title = `Puzzle ${idx}: Master Split (3s & 4s)`;
+                        subtitle = 'Coordinate two separate clusters without blocking your path!';
+                    } else if (archetypeRoll < 0.7) {
+                        const baseN = rng() < 0.5 ? 4 : 5;
+                        const gMain = growClusterCoords(3, 3, baseN, occupied, rng);
+                        if (gMain.length < baseN) continue;
+                        gMain.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(baseN, rng) }));
+                        let onesPlaced = 0;
+                        for (const anchor of gMain) {
+                            for (const [dx, dz] of [[0, -1], [0, 1], [1, 0], [-1, 0]]) {
+                                if (onesPlaced >= 3) break;
+                                const nx = anchor.gx + dx;
+                                const nz = anchor.gz + dz;
+                                if (nx >= 1 && nx <= 5 && nz >= 1 && nz <= 5 && !occupied.has(`${nx},${nz}`)) {
+                                    occupied.add(`${nx},${nz}`);
+                                    solvedDice.push({ gx: nx, gz: nz, orientation: orientationWithTop(1, rng) });
+                                    onesPlaced++;
+                                }
+                            }
+                        }
+                        if (onesPlaced < 2) continue;
+                        title = `Puzzle ${idx}: Ember Cascade`;
+                        subtitle = `Use the ${baseN}-match sink wave to ignite all adjacent 1s!`;
+                    } else {
+                        const g6 = growClusterCoords(3, 3, 6, occupied, rng);
+                        if (g6.length < 6) continue;
+                        g6.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(6, rng) }));
+                        title = `Puzzle ${idx}: Grand Sixes`;
+                        subtitle = 'Unite all six 6s on the 7×7 grid!';
+                    }
+                } else if (tier === 5) {
+                    // Levels 51–70: Grand Multi-Sets & High Chains (4s + 5s, 3s + 5s, or dual 4s)
+                    if (archetypeRoll < 0.36) {
+                        const g1 = growClusterCoords(2, 2, 4, occupied, rng);
+                        const g2 = growClusterCoords(4, 4, 5, occupied, rng);
+                        if (g1.length < 4 || g2.length < 5) continue;
+                        g1.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(4, rng) }));
+                        g2.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(5, rng) }));
+                        title = `Puzzle ${idx}: Grand Multi-Set (4s & 5s)`;
+                        subtitle = 'Clear both the 4-die and 5-die formations!';
+                    } else if (archetypeRoll < 0.7) {
+                        const g1 = growClusterCoords(2, 3, 3, occupied, rng);
+                        const g2 = growClusterCoords(4, 3, 5, occupied, rng);
+                        if (g1.length < 3 || g2.length < 5) continue;
+                        g1.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(3, rng) }));
+                        g2.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(5, rng) }));
+                        title = `Puzzle ${idx}: High Chain (3s & 5s)`;
+                        subtitle = 'Unite the trio of 3s and the quintet of 5s!';
+                    } else {
+                        const g1 = growClusterCoords(2, 2, 4, occupied, rng);
+                        const g2 = growClusterCoords(4, 4, 4, occupied, rng);
+                        if (g1.length < 4 || g2.length < 4) continue;
+                        g1.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(4, rng) }));
+                        g2.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(4, rng) }));
+                        title = `Puzzle ${idx}: Twin Quads (4s & 4s)`;
+                        subtitle = 'Assemble two separate 4-die clusters without tangling them!';
+                    }
+                } else if (tier === 6) {
+                    // Levels 71–90: Inferno Ignition & Triple Clusters (4s/5s/6s + 2–4 1s, or 2s + 3s + 4s)
+                    if (archetypeRoll < 0.52) {
+                        const baseN = rng() < 0.34 ? 4 : (rng() < 0.67 ? 5 : 6);
+                        const gMain = growClusterCoords(3, 3, baseN, occupied, rng);
+                        if (gMain.length < baseN) continue;
+                        gMain.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(baseN, rng) }));
+                        const targetOnes = 2 + Math.floor(rng() * 3); // 2 to 4 adjacent 1s
+                        let onesPlaced = 0;
+                        for (const anchor of gMain) {
+                            for (const [dx, dz] of [[0, -1], [0, 1], [1, 0], [-1, 0]]) {
+                                if (onesPlaced >= targetOnes) break;
+                                const nx = anchor.gx + dx;
+                                const nz = anchor.gz + dz;
+                                if (nx >= 1 && nx <= 5 && nz >= 1 && nz <= 5 && !occupied.has(`${nx},${nz}`)) {
+                                    occupied.add(`${nx},${nz}`);
+                                    solvedDice.push({ gx: nx, gz: nz, orientation: orientationWithTop(1, rng) });
+                                    onesPlaced++;
+                                }
+                            }
+                        }
+                        if (onesPlaced < 2) continue;
+                        title = `Puzzle ${idx}: Inferno Ignition (${baseN}s + ${onesPlaced}×1s)`;
+                        subtitle = `Trigger the ${baseN}-match wave to ignite all ${onesPlaced} surrounding 1s!`;
+                    } else {
+                        const g2 = growClusterCoords(1, 2, 2, occupied, rng);
+                        const g3 = growClusterCoords(3, 2, 3, occupied, rng);
+                        const g4 = growClusterCoords(4, 4, 4, occupied, rng);
+                        if (g2.length < 2 || g3.length < 3 || g4.length < 4) continue;
+                        g2.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(2, rng) }));
+                        g3.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(3, rng) }));
+                        g4.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(4, rng) }));
+                        title = `Puzzle ${idx}: Triple Cluster (2s, 3s & 4s)`;
+                        subtitle = 'Clear three distinct clusters while keeping your lanes open!';
+                    }
+                } else {
+                    // Levels 91–100: Grandmaster Gauntlet (5s/6s + cascading 1s, or 5s + 6s dual clusters)
+                    if (archetypeRoll < 0.5) {
+                        const baseN = rng() < 0.45 ? 5 : 6;
+                        const gMain = growClusterCoords(3, 3, baseN, occupied, rng);
+                        if (gMain.length < baseN) continue;
+                        gMain.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(baseN, rng) }));
+                        const targetOnes = 3 + Math.floor(rng() * 2); // 3 to 4 cascading 1s
+                        let onesPlaced = 0;
+                        const onesCoords = [];
+                        for (const anchor of gMain) {
+                            for (const [dx, dz] of [[0, -1], [0, 1], [1, 0], [-1, 0]]) {
+                                if (onesPlaced >= targetOnes) break;
+                                const nx = anchor.gx + dx;
+                                const nz = anchor.gz + dz;
+                                if (nx >= 1 && nx <= 5 && nz >= 1 && nz <= 5 && !occupied.has(`${nx},${nz}`)) {
+                                    occupied.add(`${nx},${nz}`);
+                                    solvedDice.push({ gx: nx, gz: nz, orientation: orientationWithTop(1, rng) });
+                                    onesCoords.push({ gx: nx, gz: nz });
+                                    onesPlaced++;
+                                }
+                            }
+                        }
+                        // Add a chained 1 extending from the first 1 for true cascading ignition
+                        if (onesCoords.length > 0 && onesPlaced < 4) {
+                            const tail = onesCoords[0];
+                            for (const [dx, dz] of [[0, -1], [0, 1], [1, 0], [-1, 0]]) {
+                                const nx = tail.gx + dx;
+                                const nz = tail.gz + dz;
+                                if (nx >= 1 && nx <= 5 && nz >= 1 && nz <= 5 && !occupied.has(`${nx},${nz}`)) {
+                                    occupied.add(`${nx},${nz}`);
+                                    solvedDice.push({ gx: nx, gz: nz, orientation: orientationWithTop(1, rng) });
+                                    onesPlaced++;
+                                    break;
+                                }
+                            }
+                        }
+                        if (onesPlaced < 3) continue;
+                        title = `Puzzle ${idx}: Grandmaster Cascade (${baseN}s + 1s)`;
+                        subtitle = `Unite the ${baseN}s to spark a multi-step 1s chain reaction!`;
+                    } else {
+                        const g5 = growClusterCoords(2, 2, 5, occupied, rng);
+                        const g6 = growClusterCoords(4, 4, 6, occupied, rng);
+                        if (g5.length < 5 || g6.length < 6) continue;
+                        g5.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(5, rng) }));
+                        g6.forEach(p => solvedDice.push({ gx: p.gx, gz: p.gz, orientation: orientationWithTop(6, rng) }));
+                        title = `Puzzle ${idx}: Gauntlet Finale (5s & 6s)`;
+                        subtitle = 'Master the 7×7 arena by clearing both 5s and 6s!';
+                    }
+                }
+
+                const simDice = solvedDice.map(d => ({
+                    gx: d.gx,
+                    gz: d.gz,
+                    orientation: sanitizeOrientation(d.orientation),
+                    reverseSteps: 0
+                }));
+
+                // Escalating scramble depth across shifted levels (up to 15 reverse rolls in tiers 5–7)
+                const targetReverseRolls = srcIdx <= 50
+                    ? Math.min(11, 2 + Math.floor(srcIdx / 5))
+                    : (srcIdx <= 70 ? Math.min(14, 11 + Math.floor((srcIdx - 50) / 7))
+                    : (srcIdx <= 90 ? 14 : 15));
+                const maxStepsPerDie = srcIdx > 50 ? 4 : 3;
+                const dirKeys = ['N', 'S', 'E', 'W'];
+                let performedRolls = 0;
+                let lastRolledDieIdx = 0;
+
+                for (let step = 0; step < targetReverseRolls * 9 && performedRolls < targetReverseRolls; step++) {
+                    const dIdx = Math.floor(rng() * simDice.length);
+                    const candidate = simDice[dIdx];
+                    if (candidate.reverseSteps >= maxStepsPerDie) continue;
+
+                    const revDir = dirKeys[Math.floor(rng() * 4)];
+                    const { dx, dz } = DIRS[revDir];
+                    const nx = candidate.gx + dx;
+                    const nz = candidate.gz + dz;
+
+                    if (nx < 0 || nx >= GRID_SIZE || nz < 0 || nz >= GRID_SIZE) continue;
+                    if (simDice.some(other => other.gx === nx && other.gz === nz)) continue;
+
+                    candidate.gx = nx;
+                    candidate.gz = nz;
+                    candidate.orientation = computeRolledOrientation(candidate.orientation, revDir);
+                    candidate.reverseSteps++;
+                    performedRolls++;
+                    lastRolledDieIdx = dIdx;
+                }
+
+                if (performedRolls >= 1 && !boardHasImmediateMatch(simDice)) {
+                    const startDie = simDice[lastRolledDieIdx];
+                    const parEstimate = performedRolls;
+                    const def = {
+                        level: idx,
+                        title,
+                        subtitle,
+                        parMoves: parEstimate,
+                        player: { gx: startDie.gx, gz: startDie.gz, onDie: true },
+                        dice: simDice.map(d => ({
+                            gx: d.gx,
+                            gz: d.gz,
+                            orientation: d.orientation
+                        }))
+                    };
+                    puzzleCache[idx] = def;
+                    return def;
+                }
+            }
+
+            const fallbackOri = computeRolledOrientation(sanitizeOrientation({ top: 2, north: 1, east: 3 }), 'W');
+            const fallbackDef = {
+                level: idx,
+                title: `Puzzle ${idx}: Tactical Pairs`,
+                subtitle: 'Roll the dice together to match their top faces!',
+                parMoves: 2,
+                player: { gx: 2, gz: 3, onDie: true },
+                dice: [
+                    { gx: 2, gz: 3, orientation: fallbackOri },
+                    { gx: 4, gz: 3, orientation: sanitizeOrientation({ top: 2, north: 5, east: 3 }) } // stationary 2
+                ]
+            };
+            puzzleCache[idx] = fallbackDef;
+            return fallbackDef;
+        }
+
+        function ensureDieMesh(die) {
+            if (!threeReady || !scene || !die || die.state === 'removed') return null;
+            die.orientation = sanitizeOrientation(die.orientation);
+
+            if (!die.mesh) {
+                die.mesh = buildStandaloneDieMesh();
+                scene.add(die.mesh);
+            }
+
+            const wPos = gridToWorld(die.gx, die.gz);
+            if (die.state !== 'rolling') {
+                const q = quaternionFromOrientation(die.orientation);
+                if (q) die.mesh.quaternion.copy(q);
+            }
+            if (die.state !== 'rolling' && die.state !== 'sinking' && die.state !== 'rising') {
+                die.mesh.position.set(wPos.x, HALF_DIE, wPos.z);
+            }
+
+            die.mesh.scale.set(1, 1, 1);
+            die.mesh.visible = true;
+            return die.mesh;
+        }
+
+        // Core Game State
+        let grid = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
+        let diceList = [];
+        let warnings = [];
+
+        const player = {
+            gx: 3,
+            gz: 3,
+            onDie: true,
+            facing: 'N',
+            busy: false,
+            animProgress: 0,
+            startPos: { x: 0, y: DIE_SIZE, z: 0 },
+            endPos: { x: 0, y: DIE_SIZE, z: 0 }
+        };
+
+        let score = 0;
+        let clearedCount = 0;
+        let currentChain = 1;
+        let chainResetTimer = 0;
+        let spawnTimer = 0;
+        let spawnInterval = 6.0;
+        let isGameOver = false;
+        let isPaused = true;
+        let undoStack = [];
+        const MAX_UNDO_STEPS = 80;
+
+        function pushUndoSnapshot() {
+            const snapshot = {
+                dice: diceList
+                    .filter(d => d && d.state !== 'removed')
+                    .map(d => ({
+                        gx: d.gx,
+                        gz: d.gz,
+                        orientation: sanitizeOrientation(d.orientation),
+                        state: d.state === 'sinking' ? 'sinking' : 'idle',
+                        stateTimer: d.state === 'sinking' ? d.stateTimer : 0,
+                        sinkDuration: d.sinkDuration
+                    })),
+                warnings: warnings.map(w => ({ ...w })),
+                player: {
+                    gx: player.gx,
+                    gz: player.gz,
+                    onDie: player.onDie,
+                    facing: player.facing
+                },
+                score,
+                clearedCount,
+                currentChain,
+                chainResetTimer,
+                puzzleMoves
+            };
+            undoStack.push(snapshot);
+            if (undoStack.length > MAX_UNDO_STEPS) {
+                undoStack.shift();
+            }
+            updateUndoButtonState();
+        }
+
+        function updateUndoButtonState() {
+            if (!undoBtn) return;
+            undoBtn.disabled = undoStack.length === 0;
+        }
+
+        function performUndo() {
+            if (isPaused || player.busy || undoStack.length === 0) return;
+
+            const snap = undoStack.pop();
+            updateUndoButtonState();
+
+            [...diceList].forEach(removeDie);
+            warnings = snap.warnings.map(w => ({ ...w }));
+            resetTileVisuals();
+            grid = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
+
+            snap.dice.forEach(dSnap => {
+                const die = createDie(dSnap.gx, dSnap.gz, false, dSnap.orientation);
+                if (dSnap.state === 'sinking') {
+                    die.state = 'sinking';
+                    die.stateTimer = dSnap.stateTimer;
+                    die.sinkDuration = dSnap.sinkDuration || SINK_DURATION;
+                    const mesh = ensureDieMesh(die);
+                    if (threeReady && mesh && Array.isArray(mesh.material)) {
+                        mesh.material.forEach(mat => {
+                            mat.emissive.setHex(dSnap.orientation.top === 1 ? 0xf43f5e : 0x0284c7);
+                            mat.emissiveIntensity = 0.45;
+                        });
+                    }
+                }
+            });
+
+            player.gx = snap.player.gx;
+            player.gz = snap.player.gz;
+            player.onDie = snap.player.onDie;
+            player.facing = snap.player.facing;
+            player.busy = false;
+            player.animProgress = 0;
+
+            if (threeReady && playerGroup && DIRS[player.facing]) {
+                playerGroup.rotation.y = DIRS[player.facing].yaw;
+            }
+
+            score = snap.score;
+            clearedCount = snap.clearedCount;
+            currentChain = snap.currentChain;
+            chainResetTimer = snap.chainResetTimer;
+            puzzleMoves = snap.puzzleMoves;
+            isGameOver = false;
+            puzzleVictoryTriggered = false;
+
+            syncAllDiceMeshes();
+            syncPlayerWithBoardState();
+            updateHUD();
+            sfx.step();
+            showToast('↩️ Undid Move');
+        }
+
+        function createDie(gx, gz, rising = false, customOri = null) {
+            const die = {
+                gx,
+                gz,
+                mesh: null,
+                orientation: { top: 1, north: 2, east: 3 },
+                state: rising ? 'rising' : 'idle',
+                stateTimer: 0,
+                sinkDuration: SINK_DURATION,
+                rollDir: null,
+                pivotWorld: threeReady ? new THREE.Vector3() : null,
+                pivotOffsetStart: threeReady ? new THREE.Vector3() : null,
+                rollAxis: threeReady ? new THREE.Vector3(0, 0, 1) : null,
+                rollAngle: 0,
+                fromPos: threeReady ? new THREE.Vector3() : null,
+                toPos: threeReady ? new THREE.Vector3() : null,
+                startQuat: threeReady ? new THREE.Quaternion() : null,
+                targetQuat: threeReady ? new THREE.Quaternion() : null,
+                carryPlayer: false
+            };
+
+            if (customOri) {
+                die.orientation = sanitizeOrientation(customOri);
+            } else {
+                const dirKeys = ['N', 'S', 'E', 'W'];
+                const turns = 4 + Math.floor(Math.random() * 5);
+                for (let i = 0; i < turns; i++) {
+                    const d = dirKeys[Math.floor(Math.random() * 4)];
+                    die.orientation = computeRolledOrientation(die.orientation, d);
+                }
+            }
+
+            grid[gz][gx] = die;
+            diceList.push(die);
+
+            if (threeReady) {
+                const mesh = ensureDieMesh(die);
+                const wPos = gridToWorld(gx, gz);
+                if (mesh) {
+                    mesh.visible = true;
+                    mesh.position.set(wPos.x, rising ? -DIE_SIZE * 0.9 : HALF_DIE, wPos.z);
+                }
+            }
+            return die;
+        }
+
+        function syncAllDiceMeshes() {
+            if (!threeReady) return;
+            for (const die of diceList) {
+                if (!die || die.state === 'removed') continue;
+                const mesh = ensureDieMesh(die);
+                if (mesh) mesh.visible = true;
+            }
+        }
+
+        function removeDie(die) {
+            if (!die) return;
+            die.state = 'removed';
+            if (grid[die.gz] && grid[die.gz][die.gx] === die) {
+                grid[die.gz][die.gx] = null;
+            }
+            if (threeReady && die.mesh) {
+                if (scene) scene.remove(die.mesh);
+                if (Array.isArray(die.mesh.material)) {
+                    die.mesh.material.forEach(mat => {
+                        if (mat && typeof mat.dispose === 'function') mat.dispose();
+                    });
+                }
+                die.mesh = null;
+            }
+            diceList = diceList.filter(d => d !== die && d.state !== 'removed');
+        }
+
+        function syncPlayerWithBoardState() {
+            if (!playerGroup || !threeReady) return;
+            if (player.busy) return;
+
+            if (player.onDie) {
+                const cell = (grid[player.gz] && grid[player.gz][player.gx]) ? grid[player.gz][player.gx] : null;
+                if (cell && cell.state !== 'removed') {
+                    const mesh = ensureDieMesh(cell);
+                    const wPos = gridToWorld(cell.gx, cell.gz);
+                    const topY = mesh ? mesh.position.y + HALF_DIE : DIE_SIZE;
+                    playerGroup.position.set(wPos.x, Math.max(0, topY), wPos.z);
+                    return;
+                }
+                player.onDie = false;
+                updateHUD();
+            }
+
+            const safeX = Math.max(0, Math.min(GRID_SIZE - 1, player.gx));
+            const safeZ = Math.max(0, Math.min(GRID_SIZE - 1, player.gz));
+            player.gx = safeX;
+            player.gz = safeZ;
+            const wPos = gridToWorld(player.gx, player.gz);
+            playerGroup.position.set(wPos.x, 0, wPos.z);
+        }
+
+        function getOrthogonalNeighbors(gx, gz) {
+            const res = [];
+            for (const [dx, dz] of [[0, -1], [0, 1], [1, 0], [-1, 0]]) {
+                const nx = gx + dx;
+                const nz = gz + dz;
+                if (nx >= 0 && nx < GRID_SIZE && nz >= 0 && nz < GRID_SIZE) {
+                    res.push(grid[nz][nx]);
+                }
+            }
+            return res;
+        }
+
+        function floodFillIdleValue(startX, startZ, targetVal) {
+            const visited = new Set();
+            const queue = [[startX, startZ]];
+            const result = [];
+
+            while (queue.length > 0) {
+                const [cx, cz] = queue.shift();
+                const key = `${cx},${cz}`;
+                if (visited.has(key)) continue;
+                visited.add(key);
+
+                const d = grid[cz][cx];
+                if (!d || d.state !== 'idle') continue;
+                if (d.orientation.top !== targetVal) continue;
+
+                result.push(d);
+
+                for (const [dx, dz] of [[0, -1], [0, 1], [1, 0], [-1, 0]]) {
+                    const nx = cx + dx;
+                    const nz = cz + dz;
+                    if (nx >= 0 && nx < GRID_SIZE && nz >= 0 && nz < GRID_SIZE) {
+                        queue.push([nx, nz]);
+                    }
+                }
+            }
+            return result;
+        }
+
+        function triggerSinkingGroup(group, isOnesBonus) {
+            if (!Array.isArray(group) || group.length === 0) return;
+
+            const idleDice = group.filter(d => d && d.state === 'idle');
+            if (idleDice.length === 0) return;
+
+            const hadSinkingBefore = diceList.some(d => d && d.state === 'sinking');
+
+            idleDice.forEach(d => {
+                d.state = 'sinking';
+                d.stateTimer = 0;
+                const mesh = ensureDieMesh(d);
+                const wPos = gridToWorld(d.gx, d.gz);
+                spawnMatchBurst(wPos.x, DIE_SIZE * 0.65, wPos.z, isOnesBonus ? 0xf43f5e : 0x38bdf8);
+                if (threeReady && mesh && Array.isArray(mesh.material)) {
+                    mesh.material.forEach(mat => {
+                        mat.emissive.setHex(isOnesBonus ? 0xf43f5e : 0x0284c7);
+                        mat.emissiveIntensity = 0.45;
+                    });
+                }
+            });
+
+            if (hadSinkingBefore || chainResetTimer > 0) {
+                currentChain++;
+            } else {
+                currentChain = 1;
+            }
+            chainResetTimer = 4.0;
+
+            const topFace = idleDice[0].orientation.top;
+            const points = idleDice.length * Math.max(topFace, 2) * 50 * currentChain;
+            score += points;
+            clearedCount += idleDice.length;
+
+            sfx.match(currentChain);
+            updateHUD();
+
+            if (gameMode === 'puzzle') {
+                showToast(isOnesBonus ? `🔥 1s IGNITED! (${idleDice.length})` : `✨ MATCH ${topFace}s (${idleDice.length})!`);
+            } else if (currentChain > 1 || isOnesBonus) {
+                showToast(isOnesBonus ? `🔥 1s IGNITED! x${currentChain}` : `⚡ CHAIN x${currentChain}! +${points}`);
+            } else {
+                showToast(`✨ MATCH ${topFace}s (${idleDice.length})! +${points}`);
+            }
+        }
+
+        function checkAllMatches() {
+            const visitedGlobal = new Set();
+            const clustersToSink = [];
+
+            for (const die of diceList) {
+                if (!die || die.state !== 'idle') continue;
+                const key = `${die.gx},${die.gz}`;
+                if (visitedGlobal.has(key)) continue;
+
+                const val = die.orientation.top;
+                if (typeof val !== 'number' || !Number.isInteger(val) || val < 2 || val > 6) continue;
+
+                const cluster = floodFillIdleValue(die.gx, die.gz, val);
+                cluster.forEach(d => visitedGlobal.add(`${d.gx},${d.gz}`));
+
+                if (cluster.length >= val) {
+                    clustersToSink.push(cluster);
+                }
+            }
+
+            clustersToSink.forEach(cluster => {
+                triggerSinkingGroup(cluster, false);
+            });
+
+            let ignitedMore = true;
+            while (ignitedMore) {
+                ignitedMore = false;
+                for (const die of diceList) {
+                    if (!die || die.state !== 'idle' || die.orientation.top !== 1) continue;
+                    const touchesActiveSinking = getOrthogonalNeighbors(die.gx, die.gz)
+                        .some(n => n && n.state === 'sinking');
+                    if (touchesActiveSinking) {
+                        const onesGroup = floodFillIdleValue(die.gx, die.gz, 1);
+                        if (onesGroup.length > 0) {
+                            triggerSinkingGroup(onesGroup, true);
+                            ignitedMore = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        function isTileWalkableFloor(gx, gz) {
+            if (gx < 0 || gx >= GRID_SIZE || gz < 0 || gz >= GRID_SIZE) return false;
+            return grid[gz][gx] === null;
+        }
+
+        function getDieAt(gx, gz) {
+            if (gx < 0 || gx >= GRID_SIZE || gz < 0 || gz >= GRID_SIZE) return null;
+            const cell = grid[gz][gx];
+            if (!cell) return null;
+            if (cell.state === 'idle' || (cell.state === 'sinking' && cell.stateTimer < cell.sinkDuration * 0.85)) {
+                return cell;
+            }
+            return null;
+        }
+
+        function startDieRoll(die, dir, carryPlayer) {
+            if (!die || die.state === 'rolling' || die.state === 'sinking') return;
+            const { dx, dz } = DIRS[dir];
+            const oldX = die.gx;
+            const oldZ = die.gz;
+            const nx = oldX + dx;
+            const nz = oldZ + dz;
+            if (nx < 0 || nx >= GRID_SIZE || nz < 0 || nz >= GRID_SIZE) return;
+            if (grid[nz][nx] !== null) return;
+
+            pushUndoSnapshot();
+
+            warnings = warnings.filter(w => !(w.gx === nx && w.gz === nz));
+
+            if (grid[oldZ] && grid[oldZ][oldX] === die) {
+                grid[oldZ][oldX] = null;
+            }
+            die.gx = nx;
+            die.gz = nz;
+            grid[nz][nx] = die;
+
+            die.state = 'rolling';
+            die.stateTimer = 0;
+            die.rollDir = dir;
+            die.carryPlayer = Boolean(carryPlayer);
+
+            const startWorld = gridToWorld(oldX, oldZ);
+            const targetWorld = gridToWorld(nx, nz);
+            const mesh = ensureDieMesh(die);
+            const currentY = (threeReady && mesh) ? mesh.position.y : HALF_DIE;
+
+            if (threeReady && mesh) {
+                mesh.visible = true;
+                die.fromPos.set(startWorld.x, currentY, startWorld.z);
+                die.toPos.set(targetWorld.x, currentY, targetWorld.z);
+
+                const currentQuat = quaternionFromOrientation(die.orientation);
+                if (currentQuat) {
+                    mesh.quaternion.copy(currentQuat);
+                    die.startQuat.copy(currentQuat);
+                } else {
+                    die.startQuat.copy(mesh.quaternion);
+                }
+
+                if (dir === 'E') {
+                    die.pivotWorld.set(startWorld.x + HALF_DIE, currentY - HALF_DIE, startWorld.z);
+                    die.rollAxis.set(0, 0, 1);
+                    die.rollAngle = -Math.PI / 2;
+                } else if (dir === 'W') {
+                    die.pivotWorld.set(startWorld.x - HALF_DIE, currentY - HALF_DIE, startWorld.z);
+                    die.rollAxis.set(0, 0, 1);
+                    die.rollAngle = Math.PI / 2;
+                } else if (dir === 'S') {
+                    die.pivotWorld.set(startWorld.x, currentY - HALF_DIE, startWorld.z + HALF_DIE);
+                    die.rollAxis.set(1, 0, 0);
+                    die.rollAngle = Math.PI / 2;
+                } else if (dir === 'N') {
+                    die.pivotWorld.set(startWorld.x, currentY - HALF_DIE, startWorld.z - HALF_DIE);
+                    die.rollAxis.set(1, 0, 0);
+                    die.rollAngle = -Math.PI / 2;
+                }
+                die.pivotOffsetStart.subVectors(die.fromPos, die.pivotWorld);
+            }
+
+            die.orientation = computeRolledOrientation(die.orientation, dir);
+            if (threeReady && die.targetQuat) {
+                const nextQuat = quaternionFromOrientation(die.orientation);
+                if (nextQuat) die.targetQuat.copy(nextQuat);
+            }
+
+            if (die.carryPlayer) {
+                player.gx = nx;
+                player.gz = nz;
+                player.onDie = true;
+                player.busy = true;
+            } else if (player.onDie && player.gx === oldX && player.gz === oldZ) {
+                player.gx = oldX;
+                player.gz = oldZ;
+                player.onDie = false;
+                const floorW = gridToWorld(oldX, oldZ);
+                setPlayerWorldPos(floorW.x, 0, floorW.z);
+            }
+
+            if (gameMode === 'puzzle') {
+                puzzleMoves++;
+            }
+
+            sfx.roll();
+            updateHUD();
+        }
+
+        function movePlayer(dir) {
+            if (isPaused || isGameOver || puzzleVictoryTriggered || player.busy) return;
+            const dInfo = DIRS[dir];
+            if (!dInfo) return;
+
+            player.facing = dir;
+            if (threeReady && playerGroup) {
+                targetPlayerYaw = dInfo.yaw;
+            }
+
+            const nx = player.gx + dInfo.dx;
+            const nz = player.gz + dInfo.dz;
+            if (nx < 0 || nx >= GRID_SIZE || nz < 0 || nz >= GRID_SIZE) return;
+
+            if (player.onDie) {
+                const currentDie = getDieAt(player.gx, player.gz);
+                if (!currentDie) {
+                    player.onDie = false;
+                    updateHUD();
+                    return;
+                }
+
+                const nextDie = getDieAt(nx, nz);
+                if (nextDie) {
+                    player.busy = true;
+                    player.animProgress = 0;
+                    const curW = gridToWorld(player.gx, player.gz);
+                    const nxtW = gridToWorld(nx, nz);
+                    const startY = (threeReady && playerGroup) ? playerGroup.position.y : DIE_SIZE;
+                    const nextMesh = ensureDieMesh(nextDie);
+                    const endY = (threeReady && nextMesh) ? nextMesh.position.y + DIE_SIZE / 2 : DIE_SIZE;
+                    player.startPos = { x: curW.x, y: startY, z: curW.z };
+                    player.endPos = { x: nxtW.x, y: endY, z: nxtW.z };
+                    player.gx = nx;
+                    player.gz = nz;
+                    sfx.step();
+                    updateHUD();
+                } else if (isTileWalkableFloor(nx, nz) && currentDie.state === 'idle') {
+                    startDieRoll(currentDie, dir, true);
+                }
+            } else {
+                const targetDie = getDieAt(nx, nz);
+                if (!targetDie) {
+                    if (isTileWalkableFloor(nx, nz)) {
+                        player.busy = true;
+                        player.animProgress = 0;
+                        const curW = gridToWorld(player.gx, player.gz);
+                        const nxtW = gridToWorld(nx, nz);
+                        const startY = (threeReady && playerGroup) ? playerGroup.position.y : 0;
+                        player.startPos = { x: curW.x, y: startY, z: curW.z };
+                        player.endPos = { x: nxtW.x, y: 0, z: nxtW.z };
+                        player.gx = nx;
+                        player.gz = nz;
+                        sfx.step();
+                        updateHUD();
+                    }
+                    return;
+                }
+
+                const bx = nx + dInfo.dx;
+                const bz = nz + dInfo.dz;
+                const canPush = targetDie.state === 'idle' && isTileWalkableFloor(bx, bz);
+
+                if (canPush) {
+                    startDieRoll(targetDie, dir, false);
+                    player.busy = true;
+                    player.animProgress = 0;
+                    const curW = gridToWorld(player.gx, player.gz);
+                    const nxtW = gridToWorld(nx, nz);
+                    const startY = (threeReady && playerGroup) ? playerGroup.position.y : 0;
+                    player.startPos = { x: curW.x, y: startY, z: curW.z };
+                    player.endPos = { x: nxtW.x, y: 0, z: nxtW.z };
+                    player.gx = nx;
+                    player.gz = nz;
+                    updateHUD();
+                } else {
+                    player.onDie = true;
+                    player.busy = true;
+                    player.animProgress = 0;
+                    const curW = gridToWorld(player.gx, player.gz);
+                    const nxtW = gridToWorld(nx, nz);
+                    const startY = (threeReady && playerGroup) ? playerGroup.position.y : 0;
+                    const targetMesh = ensureDieMesh(targetDie);
+                    const endY = (threeReady && targetMesh) ? targetMesh.position.y + DIE_SIZE / 2 : DIE_SIZE;
+                    player.startPos = { x: curW.x, y: startY, z: curW.z };
+                    player.endPos = { x: nxtW.x, y: endY, z: nxtW.z };
+                    player.gx = nx;
+                    player.gz = nz;
+                    sfx.hop(true);
+                    updateHUD();
+                    showToast(`Climbed onto [${targetDie.orientation.top}]`);
+                }
+            }
+        }
+
+        function hopToggle() {
+            if (isPaused || isGameOver || puzzleVictoryTriggered || player.busy) return;
+
+            if (player.onDie) {
+                const checkOrder = [player.facing, 'N', 'S', 'E', 'W'];
+                for (const d of checkOrder) {
+                    const { dx, dz, yaw } = DIRS[d];
+                    const nx = player.gx + dx;
+                    const nz = player.gz + dz;
+                    if (isTileWalkableFloor(nx, nz)) {
+                        player.facing = d;
+                        if (threeReady && playerGroup) playerGroup.rotation.y = yaw;
+                        player.onDie = false;
+                        player.busy = true;
+                        player.animProgress = 0;
+                        const curW = gridToWorld(player.gx, player.gz);
+                        const nxtW = gridToWorld(nx, nz);
+                        const startY = (threeReady && playerGroup) ? playerGroup.position.y : DIE_SIZE;
+                        player.startPos = { x: curW.x, y: startY, z: curW.z };
+                        player.endPos = { x: nxtW.x, y: 0, z: nxtW.z };
+                        player.gx = nx;
+                        player.gz = nz;
+                        sfx.hop(false);
+                        updateHUD();
+                        return;
+                    }
+                }
+                showToast('No empty floor tile adjacent!');
+            } else {
+                const checkOrder = [player.facing, 'N', 'S', 'E', 'W'];
+                for (const d of checkOrder) {
+                    const { dx, dz, yaw } = DIRS[d];
+                    const nx = player.gx + dx;
+                    const nz = player.gz + dz;
+                    const adjDie = getDieAt(nx, nz);
+                    if (adjDie) {
+                        player.facing = d;
+                        if (threeReady && playerGroup) playerGroup.rotation.y = yaw;
+                        player.onDie = true;
+                        player.busy = true;
+                        player.animProgress = 0;
+                        const curW = gridToWorld(player.gx, player.gz);
+                        const nxtW = gridToWorld(nx, nz);
+                        const startY = (threeReady && playerGroup) ? playerGroup.position.y : 0;
+                        const adjMesh = ensureDieMesh(adjDie);
+                        const endY = (threeReady && adjMesh) ? adjMesh.position.y + DIE_SIZE / 2 : DIE_SIZE;
+                        player.startPos = { x: curW.x, y: startY, z: curW.z };
+                        player.endPos = { x: nxtW.x, y: endY, z: nxtW.z };
+                        player.gx = nx;
+                        player.gz = nz;
+                        sfx.hop(true);
+                        updateHUD();
+                        return;
+                    }
+                }
+                showToast('Stand next to a die to climb!');
+            }
+        }
+
+        function queueSpawnWarning() {
+            if (gameMode !== 'arcade') return;
+            const candidates = [];
+            for (let gz = 0; gz < GRID_SIZE; gz++) {
+                for (let gx = 0; gx < GRID_SIZE; gx++) {
+                    if (grid[gz][gx] !== null) continue;
+                    if (!player.onDie && player.gx === gx && player.gz === gz) continue;
+                    if (warnings.some(w => w.gx === gx && w.gz === gz)) continue;
+                    candidates.push({ gx, gz });
+                }
+            }
+
+            if (candidates.length === 0) {
+                if (diceList.length >= GRID_SIZE * GRID_SIZE - 1) {
+                    triggerGameOver();
+                }
+                return;
+            }
+
+            const pick = candidates[Math.floor(Math.random() * candidates.length)];
+            warnings.push({ gx: pick.gx, gz: pick.gz, timer: 0, duration: 2.0 });
+        }
+
+        function resetTileVisuals() {
+            if (!threeReady || tileMeshes.length !== GRID_SIZE) return;
+            for (let gz = 0; gz < GRID_SIZE; gz++) {
+                for (let gx = 0; gx < GRID_SIZE; gx++) {
+                    const tm = tileMeshes[gz][gx];
+                    if (tm && tm.material) {
+                        tm.material.color.setHex(tm.userData.baseColor);
+                        tm.material.emissive.setHex(0x000000);
+                        tm.material.emissiveIntensity = 0;
+                    }
+                }
+            }
+        }
+
+        function initPuzzleLevel(levelNum) {
+            gameMode = 'puzzle';
+            currentPuzzleIndex = Math.max(1, Math.min(TOTAL_PUZZLES, levelNum));
+            const def = getPuzzleDefinition(currentPuzzleIndex);
+
+            [...diceList].forEach(removeDie);
+            warnings = [];
+            resetTileVisuals();
+            grid = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
+
+            score = 0;
+            clearedCount = 0;
+            currentChain = 1;
+            chainResetTimer = 0;
+            spawnTimer = 0;
+            puzzleMoves = 0;
+            isGameOver = false;
+            puzzleVictoryTriggered = false;
+            undoStack = [];
+            updateUndoButtonState();
+
+            def.dice.forEach(d => {
+                createDie(d.gx, d.gz, false, d.orientation);
+            });
+
+            player.gx = def.player.gx;
+            player.gz = def.player.gz;
+            player.onDie = Boolean(def.player.onDie);
+            player.busy = false;
+            player.facing = 'N';
+            if (threeReady && playerGroup) playerGroup.rotation.y = 0;
+            const startW = gridToWorld(player.gx, player.gz);
+            setPlayerWorldPos(startW.x, player.onDie ? DIE_SIZE : 0, startW.z);
+
+            syncAllDiceMeshes();
+            syncPlayerWithBoardState();
+            updateHUD();
+            showToast(def.title);
+        }
+
+        function initArcadeGame() {
+            gameMode = 'arcade';
+            [...diceList].forEach(removeDie);
+            warnings = [];
+            resetTileVisuals();
+            grid = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
+
+            score = 0;
+            clearedCount = 0;
+            currentChain = 1;
+            chainResetTimer = 0;
+            spawnTimer = 0;
+            spawnInterval = 6.0;
+            isGameOver = false;
+            puzzleVictoryTriggered = false;
+            undoStack = [];
+            updateUndoButtonState();
+
+            createDie(3, 3, false);
+            let placed = 1;
+            let guard = 0;
+            while (placed < 14 && guard < 200) {
+                guard++;
+                const gx = Math.floor(Math.random() * GRID_SIZE);
+                const gz = Math.floor(Math.random() * GRID_SIZE);
+                if (grid[gz][gx] === null) {
+                    createDie(gx, gz, false);
+                    placed++;
+                }
+            }
+
+            player.gx = 3;
+            player.gz = 3;
+            player.onDie = true;
+            player.busy = false;
+            player.facing = 'N';
+            if (threeReady && playerGroup) playerGroup.rotation.y = 0;
+            const startW = gridToWorld(3, 3);
+            setPlayerWorldPos(startW.x, DIE_SIZE, startW.z);
+
+            checkAllMatches();
+            syncAllDiceMeshes();
+            syncPlayerWithBoardState();
+            updateHUD();
+        }
+
+        function resetCurrentMode() {
+            if (gameMode === 'puzzle') {
+                initPuzzleLevel(currentPuzzleIndex);
+            } else {
+                initArcadeGame();
+            }
+        }
+
+        function triggerPuzzleVictory() {
+            if (puzzleVictoryTriggered) return;
+            puzzleVictoryTriggered = true;
+            isPaused = true;
+            sfx.victory();
+
+            const def = getPuzzleDefinition(currentPuzzleIndex);
+            const prevBest = puzzleProgress.completed[currentPuzzleIndex];
+            const bestMoves = prevBest ? Math.min(prevBest, puzzleMoves) : puzzleMoves;
+
+            puzzleProgress.completed[currentPuzzleIndex] = bestMoves;
+            if (currentPuzzleIndex >= puzzleProgress.unlocked && currentPuzzleIndex < TOTAL_PUZZLES) {
+                puzzleProgress.unlocked = currentPuzzleIndex + 1;
+            }
+            savePuzzleProgress();
+            updateHUD();
+
+            const isFinalPuzzle = currentPuzzleIndex >= TOTAL_PUZZLES;
+            openModal({
+                title: isFinalPuzzle ? '🏆 All 100 Puzzles Cleared!' : `🎉 ${def.title} Cleared!`,
+                bodyHtml: `
+                    <p>${isFinalPuzzle
+                        ? 'Incredible mastery! You solved all 100 puzzles in Dice Roll 3D.'
+                        : 'Every die on the board has been cleared!'}</p>
+                    <ul>
+                        <li><strong>Moves Used:</strong> ${puzzleMoves}</li>
+                        <li><strong>Best Moves:</strong> ${bestMoves} (Par: ${def.parMoves})</li>
+                        <li><strong>Progress:</strong> ${Object.keys(puzzleProgress.completed).length} / ${TOTAL_PUZZLES} Puzzles Solved</li>
+                    </ul>
+                `,
+                primaryText: isFinalPuzzle ? '♾️ Play Endless Arcade' : `➡️ Next Puzzle (${currentPuzzleIndex + 1}/100)`,
+                primaryAction: isFinalPuzzle ? 'start-arcade' : 'next-puzzle',
+                secondaryText: '🔄 Replay Puzzle',
+                secondaryAction: 'retry-current',
+                tertiaryText: '📋 Level Select',
+                tertiaryAction: 'open-levels'
+            });
+        }
+
+        function openLevelSelectModal() {
+            const solvedCount = Object.keys(puzzleProgress.completed).length;
+            let gridHtml = '<div class="puzzle-grid">';
+            for (let i = 1; i <= TOTAL_PUZZLES; i++) {
+                const isSolved = Boolean(puzzleProgress.completed[i]);
+                const isUnlocked = i <= puzzleProgress.unlocked || isSolved;
+                const isCurrent = gameMode === 'puzzle' && i === currentPuzzleIndex;
+                const best = puzzleProgress.completed[i];
+                const cls = [
+                    'puzzle-cell',
+                    isSolved ? 'completed' : '',
+                    isCurrent ? 'current' : '',
+                    !isUnlocked ? 'locked' : ''
+                ].filter(Boolean).join(' ');
+
+                const metaText = isSolved ? `★ ${best}m` : (isUnlocked ? 'Play' : '🔒');
+                gridHtml += `
+                    <button type="button" class="${cls}" data-puzzle-num="${i}">
+                        <span class="puzzle-num">${i}</span>
+                        <span class="puzzle-meta">${metaText}</span>
+                    </button>
+                `;
+            }
+            gridHtml += '</div>';
+
+            openModal({
+                title: '📋 100-Level Puzzle Select',
+                bodyHtml: `
+                    <div class="puzzle-badge-bar">
+                        <span><strong>Solved:</strong> ${solvedCount} / ${TOTAL_PUZZLES}</span>
+                        <span><strong>Unlocked:</strong> up to #${puzzleProgress.unlocked}</span>
+                    </div>
+                    ${gridHtml}
+                `,
+                primaryText: gameMode === 'puzzle' ? `▶️ Resume Puzzle ${currentPuzzleIndex}` : `🧩 Play Puzzle ${puzzleProgress.unlocked}`,
+                primaryAction: gameMode === 'puzzle' ? 'resume' : 'start-puzzle',
+                secondaryText: '♾️ Endless Arcade',
+                secondaryAction: 'start-arcade',
+                tertiaryText: '❓ Rules',
+                tertiaryAction: 'open-rules'
+            });
+
+            modalBody.querySelectorAll('.puzzle-cell').forEach(cell => {
+                cell.addEventListener('click', () => {
+                    const num = Number(cell.getAttribute('data-puzzle-num'));
+                    if (!num) return;
+                    sfx.ensureContext();
+                    initPuzzleLevel(num);
+                    isPaused = false;
+                    hideModal();
+                });
+            });
+        }
+
+        function openRulesModal() {
+            openModal({
+                title: '🎲 Dice Roll 3D — Rules',
+                bodyHtml: `
+                    <p>Roll 3D dice across the 7×7 grid to match their top numbers and trigger chain reactions.</p>
+                    <ul>
+                        <li><strong>Puzzle Mode (100 Levels):</strong> Clear every die on the board. Starts with matching 3s (#1) and 4s (#2), then scales into multi-cluster, 1s-ignition, and Grandmaster Gauntlet puzzles!</li>
+                        <li><strong>Endless Arcade Mode:</strong> Survive rising dice waves and rack up high scores.</li>
+                        <li><strong>Strict N-Match Rule (2–6):</strong> A die showing <strong>N</strong> on top sinks when connected orthogonally to <strong>at least N dice</strong> showing <strong>N</strong>.</li>
+                        <li><strong>Special 1s Rule:</strong> A <strong>1</strong> won't sink alone—connect or roll <strong>1</strong>s orthogonally adjacent to an already <em>sinking</em> die to ignite them!</li>
+                        <li><strong>Hop &amp; Push:</strong> Tap <strong>HOP</strong> (or Space) to drop onto the floor or climb up. Walk into a die from the floor to push/roll it when space is open behind it.</li>
+                    </ul>
+                `,
+                primaryText: gameMode === 'puzzle' ? `▶️ Resume Puzzle ${currentPuzzleIndex}/100` : '▶️ Resume Arcade',
+                primaryAction: 'resume',
+                secondaryText: '📋 100-Level Select',
+                secondaryAction: 'open-levels',
+                tertiaryText: gameMode === 'puzzle' ? '♾️ Switch to Arcade' : '🧩 Switch to Puzzle',
+                tertiaryAction: gameMode === 'puzzle' ? 'start-arcade' : 'start-puzzle'
+            });
+        }
+
+        function hideModal() {
+            if (!modalBackdrop) return;
+            modalBackdrop.classList.add('hidden');
+            modalBackdrop.style.display = 'none';
+            modalBackdrop.style.pointerEvents = 'none';
+            modalBackdrop.setAttribute('aria-hidden', 'true');
+        }
+
+        function showModal() {
+            if (!modalBackdrop) return;
+            modalBackdrop.classList.remove('hidden');
+            modalBackdrop.style.display = 'flex';
+            modalBackdrop.style.pointerEvents = 'auto';
+            modalBackdrop.setAttribute('aria-hidden', 'false');
+            if (modalCard) {
+                modalCard.scrollTop = 0;
+            }
+        }
+
+        function openModal(options) {
+            isPaused = true;
+            if (modalTitle) modalTitle.textContent = options.title || '🎲 Dice Roll 3D';
+            if (modalBody) modalBody.innerHTML = options.bodyHtml || '';
+
+            if (modalActionBtn) {
+                modalActionBtn.textContent = options.primaryText || 'Start Rolling!';
+                modalActionBtn.dataset.nextAction = options.primaryAction || 'resume';
+            }
+            if (modalSecondaryBtn) {
+                if (options.secondaryText) {
+                    modalSecondaryBtn.style.display = 'block';
+                    modalSecondaryBtn.textContent = options.secondaryText;
+                    modalSecondaryBtn.dataset.nextAction = options.secondaryAction || 'open-levels';
+                } else {
+                    modalSecondaryBtn.style.display = 'none';
+                }
+            }
+            if (modalTertiaryBtn) {
+                if (options.tertiaryText) {
+                    modalTertiaryBtn.style.display = 'block';
+                    modalTertiaryBtn.textContent = options.tertiaryText;
+                    modalTertiaryBtn.dataset.nextAction = options.tertiaryAction || 'start-arcade';
+                } else {
+                    modalTertiaryBtn.style.display = 'none';
+                }
+            }
+            showModal();
+        }
+
+        function executeModalAction(action) {
+            try {
+                sfx.ensureContext();
+            } catch (e) {}
+
+            try {
+                if (action === 'start-puzzle') {
+                    initPuzzleLevel(currentPuzzleIndex);
+                    isPaused = false;
+                    hideModal();
+                } else if (action === 'next-puzzle') {
+                    const nextIdx = Math.min(TOTAL_PUZZLES, currentPuzzleIndex + 1);
+                    initPuzzleLevel(nextIdx);
+                    isPaused = false;
+                    hideModal();
+                } else if (action === 'retry-current') {
+                    resetCurrentMode();
+                    isPaused = false;
+                    hideModal();
+                } else if (action === 'start-arcade') {
+                    initArcadeGame();
+                    isPaused = false;
+                    hideModal();
+                } else if (action === 'open-levels') {
+                    openLevelSelectModal();
+                    return;
+                } else if (action === 'open-rules') {
+                    openRulesModal();
+                    return;
+                } else {
+                    if (isGameOver || puzzleVictoryTriggered || diceList.length === 0) {
+                        resetCurrentMode();
+                    }
+                    isPaused = false;
+                    hideModal();
+                }
+                syncAllDiceMeshes();
+                syncPlayerWithBoardState();
+                updateHUD();
+            } catch (err) {
+                isPaused = false;
+                hideModal();
+                if (bootStatus) bootStatus.textContent = `Start notice: ${err.message || err}`;
+            }
+        }
+
+        function triggerGameOver() {
+            if (isGameOver || gameMode === 'puzzle') return;
+            isGameOver = true;
+            sfx.gameOver();
+
+            openModal({
+                title: '💥 Arena Full!',
+                bodyHtml: `
+                    <p>The 7×7 grid filled up before more dice could clear.</p>
+                    <ul>
+                        <li><strong>Final Score:</strong> ${score.toLocaleString()}</li>
+                        <li><strong>Dice Cleared:</strong> ${clearedCount}</li>
+                        <li><strong>Chain Multiplier:</strong> x${currentChain}</li>
+                    </ul>
+                `,
+                primaryText: '🔄 Play Arcade Again',
+                primaryAction: 'retry-current',
+                secondaryText: `🧩 Puzzle Mode (${currentPuzzleIndex}/100)`,
+                secondaryAction: 'start-puzzle',
+                tertiaryText: '📋 100-Level Select',
+                tertiaryAction: 'open-levels'
+            });
+        }
+
+        function updateHUD() {
+            if (!stat1Val || !stat2Val || !stat3Val || !modeChip || !hopBtn) return;
+
+            if (gameMode === 'puzzle') {
+                const def = getPuzzleDefinition(currentPuzzleIndex);
+                stat1Label.textContent = 'Puzzle';
+                stat1Val.textContent = `${currentPuzzleIndex} / ${TOTAL_PUZZLES}`;
+                stat2Label.textContent = 'Moves';
+                stat2Val.textContent = `${puzzleMoves} (Par ${def.parMoves})`;
+                stat3Label.textContent = 'Left';
+                stat3Val.textContent = String(diceList.length);
+
+                if (modeToggleBtn) {
+                    modeToggleBtn.textContent = `🧩 Puzzle ${currentPuzzleIndex}/100`;
+                    modeToggleBtn.classList.add('mode-active');
+                }
+            } else {
+                stat1Label.textContent = 'Score';
+                stat1Val.textContent = score.toLocaleString();
+                stat2Label.textContent = 'Cleared';
+                stat2Val.textContent = String(clearedCount);
+                stat3Label.textContent = 'Chain';
+                stat3Val.textContent = `x${currentChain}`;
+
+                if (modeToggleBtn) {
+                    modeToggleBtn.textContent = '♾️ Arcade';
+                    modeToggleBtn.classList.remove('mode-active');
+                }
+            }
+
+            if (player.onDie) {
+                const d = getDieAt(player.gx, player.gz);
+                const topNum = d ? d.orientation.top : '?';
+                if (gameMode === 'puzzle') {
+                    const def = getPuzzleDefinition(currentPuzzleIndex);
+                    modeChip.textContent = `P${currentPuzzleIndex}: ON DIE [${topNum}] — ${def.subtitle}`;
+                } else {
+                    modeChip.textContent = `ON DIE [${topNum}] — Move to empty tile to ROLL`;
+                }
+                hopBtn.textContent = '⬇️ HOP DOWN';
+            } else {
+                if (gameMode === 'puzzle') {
+                    const def = getPuzzleDefinition(currentPuzzleIndex);
+                    modeChip.textContent = `P${currentPuzzleIndex}: ON FLOOR — ${def.subtitle}`;
+                } else {
+                    modeChip.textContent = 'ON FLOOR — Walk into die to PUSH or HOP UP';
+                }
+                hopBtn.textContent = '⬆️ CLIMB UP';
+            }
+        }
+
+        let controlsBound = false;
+        function bindControls() {
+            if (controlsBound) return;
+            controlsBound = true;
+
+            if (splashScreen) {
+                splashScreen.addEventListener('pointerdown', dismissSplashScreen);
+                splashScreen.addEventListener('click', dismissSplashScreen);
+            }
+
+            window.addEventListener('keydown', (e) => {
+                if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', ' '].includes(e.key)) {
+                    e.preventDefault();
+                }
+                if (isSplashActive) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        dismissSplashScreen(e);
+                    }
+                    return;
+                }
+                if (isPaused) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        const act = modalActionBtn ? modalActionBtn.dataset.nextAction : 'resume';
+                        executeModalAction(act);
+                    }
+                    return;
+                }
+                if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') movePlayer(resolveBoardDirection('UP'));
+                else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') movePlayer(resolveBoardDirection('DOWN'));
+                else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') movePlayer(resolveBoardDirection('LEFT'));
+                else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') movePlayer(resolveBoardDirection('RIGHT'));
+                else if (e.key === ' ') hopToggle();
+                else if (e.key === 'z' || e.key === 'Z' || e.key === 'u' || e.key === 'U') performUndo();
+                else if (e.key === 'r' || e.key === 'R') resetCurrentMode();
+            });
+
+            document.querySelectorAll('.dpad-btn').forEach(btn => {
+                const boardDir = btn.getAttribute('data-dir');
+                btn.addEventListener('pointerdown', (e) => {
+                    e.preventDefault();
+                    btn.classList.add('pressed');
+                    movePlayer(boardDir);
+                });
+                btn.addEventListener('pointerup', () => btn.classList.remove('pressed'));
+                btn.addEventListener('pointerleave', () => btn.classList.remove('pressed'));
+            });
+
+            if (hopBtn) {
+                hopBtn.addEventListener('pointerdown', (e) => {
+                    e.preventDefault();
+                    hopToggle();
+                });
+            }
+
+            const activePointers = new Map();
+            let lastSingleX = 0;
+            let lastSingleY = 0;
+            let lastPinchDist = null;
+
+            function getPinchDistance() {
+                if (activePointers.size < 2) return null;
+                const pts = Array.from(activePointers.values());
+                const dx = pts[0].x - pts[1].x;
+                const dy = pts[0].y - pts[1].y;
+                return Math.hypot(dx, dy);
+            }
+
+            if (container) {
+                container.addEventListener('pointerdown', (e) => {
+                    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                    if (activePointers.size === 1) {
+                        lastSingleX = e.clientX;
+                        lastSingleY = e.clientY;
+                        lastPinchDist = null;
+                    } else if (activePointers.size === 2) {
+                        lastPinchDist = getPinchDistance();
+                    }
+                });
+
+                container.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    userZoomed = true;
+                    const delta = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY) * 0.015, 1.35);
+                    camDist = Math.max(MIN_CAM_DIST, Math.min(MAX_CAM_DIST, camDist + delta));
+                }, { passive: false });
+            }
+
+            window.addEventListener('pointermove', (e) => {
+                if (!activePointers.has(e.pointerId)) return;
+                activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+                if (activePointers.size === 1) {
+                    const dx = e.clientX - lastSingleX;
+                    const dy = e.clientY - lastSingleY;
+                    lastSingleX = e.clientX;
+                    lastSingleY = e.clientY;
+
+                    camYaw -= dx * 0.007;
+                    camPitch = Math.max(0.45, Math.min(1.38, camPitch + dy * 0.006));
+                    syncDpadOrientation();
+                } else if (activePointers.size >= 2) {
+                    const currentPinchDist = getPinchDistance();
+                    if (currentPinchDist !== null && lastPinchDist !== null && lastPinchDist > 10) {
+                        const scale = lastPinchDist / currentPinchDist;
+                        userZoomed = true;
+                        camDist = Math.max(MIN_CAM_DIST, Math.min(MAX_CAM_DIST, camDist * scale));
+                    }
+                    lastPinchDist = currentPinchDist;
+                }
+            });
+
+            function releasePointer(e) {
+                if (!activePointers.has(e.pointerId)) return;
+                activePointers.delete(e.pointerId);
+                lastPinchDist = null;
+
+                if (activePointers.size === 1) {
+                    const remaining = Array.from(activePointers.values())[0];
+                    lastSingleX = remaining.x;
+                    lastSingleY = remaining.y;
+                }
+            }
+
+            window.addEventListener('pointerup', releasePointer);
+            window.addEventListener('pointercancel', releasePointer);
+
+            if (modeToggleBtn) {
+                modeToggleBtn.addEventListener('click', () => {
+                    sfx.ensureContext();
+                    if (gameMode === 'puzzle') {
+                        initArcadeGame();
+                        isPaused = false;
+                        hideModal();
+                        showToast('♾️ Endless Arcade Mode');
+                    } else {
+                        initPuzzleLevel(currentPuzzleIndex);
+                        isPaused = false;
+                        hideModal();
+                    }
+                });
+            }
+
+            if (levelSelectBtn) {
+                levelSelectBtn.addEventListener('click', () => {
+                    openLevelSelectModal();
+                });
+            }
+
+            if (undoBtn) {
+                undoBtn.addEventListener('click', () => {
+                    performUndo();
+                });
+            }
+
+            const soundBtn = document.getElementById('soundBtn');
+            if (soundBtn) {
+                soundBtn.addEventListener('click', () => {
+                    sfx.enabled = !sfx.enabled;
+                    soundBtn.textContent = sfx.enabled ? '🔊 SFX' : '🔇 Muted';
+                });
+            }
+
+            const helpBtn = document.getElementById('helpBtn');
+            if (helpBtn) {
+                helpBtn.addEventListener('click', () => {
+                    openRulesModal();
+                });
+            }
+
+            const resetBtn = document.getElementById('resetBtn');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', () => {
+                    resetCurrentMode();
+                    isPaused = false;
+                    hideModal();
+                });
+            }
+
+            [modalActionBtn, modalSecondaryBtn, modalTertiaryBtn].forEach(btn => {
+                if (!btn) return;
+                const handleBtnTrigger = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    executeModalAction(btn.dataset.nextAction || 'resume');
+                };
+                btn.addEventListener('click', handleBtnTrigger);
+                btn.addEventListener('touchend', handleBtnTrigger, { passive: false });
+            });
+
+            if (modalBackdrop) {
+                modalBackdrop.addEventListener('click', (e) => {
+                    if (e.target === modalBackdrop && !puzzleVictoryTriggered && !isGameOver) {
+                        executeModalAction('resume');
+                    }
+                });
+            }
+
+            window.addEventListener('resize', () => {
+                if (splashScreen && splashScreen.classList.contains('use-fallback')) {
+                    renderSplashFallbackArtwork();
+                }
+                if (!threeReady || !renderer || !camera) return;
+                camera.aspect = Math.max(1, window.innerWidth) / Math.max(1, window.innerHeight);
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                if (!userZoomed) {
+                    camDist = computeDefaultCamDist();
+                }
+            });
+        }
+
+        // Main Animation & Simulation Loop
+        let lastTime = performance.now();
+        const _stepQuat = typeof THREE !== 'undefined' ? new THREE.Quaternion() : null;
+        const _stepOffset = typeof THREE !== 'undefined' ? new THREE.Vector3() : null;
+        let loopStarted = false;
+
+        function animate(now) {
+            requestAnimationFrame(animate);
+            const currentNow = typeof now === 'number' ? now : performance.now();
+            const dt = Math.min(Math.max((currentNow - lastTime) / 1000, 0), 0.05);
+            lastTime = currentNow;
+
+            if (threeReady && playerGroup) {
+                let yawDelta = targetPlayerYaw - playerGroup.rotation.y;
+                yawDelta = Math.atan2(Math.sin(yawDelta), Math.cos(yawDelta));
+                playerGroup.rotation.y += yawDelta * (1 - Math.exp(-dt * 14));
+            }
+
+            if (threeReady && camera && renderer && scene) {
+                const camX = Math.sin(camYaw) * Math.cos(camPitch) * camDist;
+                const camY = Math.sin(camPitch) * camDist;
+                const camZ = Math.cos(camYaw) * Math.cos(camPitch) * camDist;
+                camera.position.set(camX, camY, camZ);
+                camera.lookAt(0, 0.25, 0);
+            }
+
+            if (!isPaused && !isGameOver && !puzzleVictoryTriggered) {
+                syncAllDiceMeshes();
+
+                if (chainResetTimer > 0) {
+                    chainResetTimer -= dt;
+                    if (chainResetTimer <= 0 && !diceList.some(d => d.state === 'sinking')) {
+                        currentChain = 1;
+                        updateHUD();
+                    }
+                }
+
+                if (gameMode === 'arcade') {
+                    spawnTimer += dt;
+                    if (spawnTimer >= spawnInterval) {
+                        spawnTimer = 0;
+                        queueSpawnWarning();
+                        spawnInterval = Math.max(3.2, 6.0 - clearedCount * 0.03);
+                    }
+                }
+
+                resetTileVisuals();
+
+                for (let i = warnings.length - 1; i >= 0; i--) {
+                    const w = warnings[i];
+                    w.timer += dt;
+                    if (threeReady && tileMeshes[w.gz] && tileMeshes[w.gz][w.gx]) {
+                        const pulse = 0.5 + 0.5 * Math.sin(w.timer * 14);
+                        const tile = tileMeshes[w.gz][w.gx];
+                        tile.material.emissive.setHex(0xfbbf24);
+                        tile.material.emissiveIntensity = 0.25 + pulse * 0.45;
+                    }
+                    if (w.timer >= w.duration) {
+                        warnings.splice(i, 1);
+                        if (grid[w.gz][w.gx] === null && !(!player.onDie && player.gx === w.gx && player.gz === w.gz)) {
+                            createDie(w.gx, w.gz, true);
+                            sfx.spawn();
+                        }
+                    }
+                }
+
+                const ROLL_DURATION = 0.17;
+                const RISE_DURATION = 0.45;
+                let ridingRollingDie = false;
+
+                for (let i = diceList.length - 1; i >= 0; i--) {
+                    const die = diceList[i];
+                    if (!die || die.state === 'removed') continue;
+
+                    if (die.state === 'rolling') {
+                        die.stateTimer += dt;
+                        const t = Math.min(die.stateTimer / ROLL_DURATION, 1);
+                        const ease = 1 - Math.pow(1 - t, 2);
+
+                        if (threeReady && die.mesh && _stepQuat && _stepOffset) {
+                            die.mesh.visible = true;
+                            const theta = die.rollAngle * ease;
+                            _stepQuat.setFromAxisAngle(die.rollAxis, theta);
+                            _stepOffset.copy(die.pivotOffsetStart).applyQuaternion(_stepQuat);
+                            die.mesh.position.copy(die.pivotWorld).add(_stepOffset);
+                            die.mesh.quaternion.copy(_stepQuat).multiply(die.startQuat);
+
+                            if (die.carryPlayer && playerGroup) {
+                                ridingRollingDie = true;
+                                playerGroup.position.set(
+                                    die.mesh.position.x,
+                                    die.mesh.position.y + HALF_DIE,
+                                    die.mesh.position.z
+                                );
+                            }
+                        }
+
+                        if (t >= 1) {
+                            if (threeReady && die.mesh) {
+                                die.mesh.visible = true;
+                                die.mesh.position.copy(die.toPos);
+                                die.mesh.quaternion.copy(die.targetQuat);
+                            }
+                            die.state = 'idle';
+                            die.stateTimer = 0;
+
+                            if (die.carryPlayer) {
+                                die.carryPlayer = false;
+                                player.busy = false;
+                                player.onDie = true;
+                                const endW = gridToWorld(die.gx, die.gz);
+                                const topY = (threeReady && die.mesh) ? die.mesh.position.y + HALF_DIE : DIE_SIZE;
+                                setPlayerWorldPos(endW.x, topY, endW.z);
+                            }
+
+                            checkAllMatches();
+                            syncAllDiceMeshes();
+                            syncPlayerWithBoardState();
+                            updateHUD();
+                        }
+                    } else if (die.state === 'rising') {
+                        die.stateTimer += dt;
+                        const t = Math.min(die.stateTimer / RISE_DURATION, 1);
+                        const ease = 1 - Math.pow(1 - t, 3);
+                        if (threeReady && die.mesh) {
+                            die.mesh.visible = true;
+                            die.mesh.position.y = -DIE_SIZE * 0.9 + ease * (DIE_SIZE * 0.9 + HALF_DIE);
+                        }
+
+                        if (t >= 1) {
+                            if (threeReady && die.mesh) {
+                                die.mesh.visible = true;
+                                die.mesh.position.y = HALF_DIE;
+                            }
+                            die.state = 'idle';
+                            die.stateTimer = 0;
+                            checkAllMatches();
+                            syncAllDiceMeshes();
+                            updateHUD();
+                        }
+                    } else if (die.state === 'sinking') {
+                        die.stateTimer += dt;
+                        const sinkProgress = Math.min(die.stateTimer / die.sinkDuration, 1);
+                        const easeSink = sinkProgress * sinkProgress * (3 - 2 * sinkProgress);
+                        const targetY = HALF_DIE - easeSink * (DIE_SIZE * 1.02);
+
+                        if (threeReady && die.mesh) {
+                            die.mesh.visible = true;
+                            die.mesh.position.y = targetY;
+                            const shimmer = 0.35 + 0.25 * Math.sin(die.stateTimer * 12);
+                            if (Array.isArray(die.mesh.material)) {
+                                die.mesh.material.forEach(m => { m.emissiveIntensity = shimmer; });
+                            }
+                        }
+
+                        if (player.onDie && player.gx === die.gx && player.gz === die.gz && !player.busy) {
+                            if (sinkProgress < 0.92) {
+                                const wPos = gridToWorld(player.gx, player.gz);
+                                setPlayerWorldPos(wPos.x, Math.max(0, targetY + HALF_DIE), wPos.z);
+                            } else {
+                                const dropT = Math.min((sinkProgress - 0.92) / 0.08, 1);
+                                const wPos = gridToWorld(player.gx, player.gz);
+                                const startDropY = Math.max(0, targetY + HALF_DIE);
+                                setPlayerWorldPos(wPos.x, startDropY * (1 - dropT), wPos.z);
+                                if (sinkProgress >= 1) {
+                                    player.onDie = false;
+                                    updateHUD();
+                                }
+                            }
+                        }
+
+                        if (sinkProgress >= 1) {
+                            const wasPlayerOnDie = (player.onDie && player.gx === die.gx && player.gz === die.gz);
+                            removeDie(die);
+                            if (wasPlayerOnDie) {
+                                player.onDie = false;
+                                player.busy = false;
+                                const wPos = gridToWorld(player.gx, player.gz);
+                                setPlayerWorldPos(wPos.x, 0, wPos.z);
+                            }
+                            checkAllMatches();
+                            syncAllDiceMeshes();
+                            syncPlayerWithBoardState();
+                            updateHUD();
+
+                            if (gameMode === 'puzzle' && diceList.length === 0) {
+                                triggerPuzzleVictory();
+                            }
+                        }
+                    }
+                }
+
+                updateParticles(dt);
+
+                const isMovingStep = player.busy && !diceList.some(d => d.carryPlayer);
+                if (isMovingStep) {
+                    const MOVE_DURATION = 0.24;
+                    player.animProgress += dt / MOVE_DURATION;
+                    const t = Math.min(player.animProgress, 1);
+                    // Smooth ease-in/ease-out keeps steps from feeling like sliding/snapping.
+                    const eased = t * t * (3 - 2 * t);
+                    const arc = Math.sin(t * Math.PI) * 0.16;
+                    const x = player.startPos.x + (player.endPos.x - player.startPos.x) * eased;
+                    const y = player.startPos.y + (player.endPos.y - player.startPos.y) * eased + arc;
+                    const z = player.startPos.z + (player.endPos.z - player.startPos.z) * eased;
+                    setPlayerWorldPos(x, y, z);
+
+                    if (t >= 1) {
+                        setPlayerWorldPos(player.endPos.x, player.endPos.y, player.endPos.z);
+                        player.busy = false;
+                        syncAllDiceMeshes();
+                        syncPlayerWithBoardState();
+                        updateHUD();
+                    }
+                } else if (!player.busy) {
+                    syncPlayerWithBoardState();
+                }
+
+                updateCharacterAnimation(currentNow, isMovingStep, ridingRollingDie);
+            } else if (threeReady && manRig) {
+                updateCharacterAnimation(currentNow, false, false);
+            }
+
+            if (threeReady && renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        function bootGame() {
+            if (loopStarted) return;
+            loopStarted = true;
+            try {
+                bindControls();
+                syncDpadOrientation();
+            } catch (err) {
+                if (bootStatus) bootStatus.textContent = `Controls notice: ${err.message || err}`;
+            }
+            try {
+                initThreeScene();
+            } catch (err) {
+                if (bootStatus) bootStatus.textContent = `3D notice: ${err.message || err}`;
+            }
+            try {
+                initPuzzleLevel(currentPuzzleIndex);
+                if (modalActionBtn) {
+                    modalActionBtn.textContent = `🧩 Play Puzzle Mode (${currentPuzzleIndex}/100)`;
+                }
+            } catch (err) {
+                if (bootStatus) bootStatus.textContent = `Boot notice: ${err.message || err}`;
+            }
+            isPaused = true;
+            showModal();
+            lastTime = performance.now();
+            requestAnimationFrame(animate);
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bootGame);
+        } else {
+            bootGame();
+        }
+        window.addEventListener('load', () => {
+            if (!threeReady) {
+                initThreeScene();
+                syncAllDiceMeshes();
+                syncPlayerWithBoardState();
+            }
+            if (isPaused && modalBackdrop && modalBackdrop.getAttribute('aria-hidden') !== 'true') {
+                showModal();
+            }
+        });
+    })();
+    </script>
+</body>
+</html>
